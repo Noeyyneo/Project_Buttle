@@ -91,6 +91,8 @@ If the database connection fails, first confirm that your current IP address is 
 
 ## Team Git workflow
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete collaboration and pull-request guide.
+
 Before starting a change, update your local `main` branch:
 
 ```bash

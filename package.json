@@ -4,6 +4,7 @@
   "description": "REST API for online job fair registration",
   "main": "server.js",
   "scripts": {
+    "check": "node --check server.js && node --check config/database.js",
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
