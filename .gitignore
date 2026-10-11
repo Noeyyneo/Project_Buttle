@@ -1,0 +1,16 @@
+# Installed dependencies
+node_modules/
+
+# Private environment settings and credentials
+.env
+.env.*
+!.env.example
+
+# Logs and test output
+logs/
+*.log
+coverage/
+
+# Operating system and editor files
+.DS_Store
+.vscode/

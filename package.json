@@ -1,0 +1,29 @@
+{
+  "name": "project_buttle",
+  "version": "1.0.0",
+  "description": "REST API for online job fair registration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Noeyyneo/Project_Buttle.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Noeyyneo/Project_Buttle/issues"
+  },
+  "homepage": "https://github.com/Noeyyneo/Project_Buttle#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^18.0.7",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.11.1"
+  }
+}
