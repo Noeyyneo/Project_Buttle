@@ -39,7 +39,7 @@ This collection stores registered users, company representatives, and administra
 | `role` | `String` | Yes | `user`, `representative`, or `admin`; defaults to `user` |
 | `companyId` | `ObjectId` | Representative only | Representative's company; references `companies` |
 | `approvalStatus` | `String` | Representative only | `pending`, `approved`, or `rejected`; representative accounts start as `pending` |
-| `approvedAt` | `Date` | No | Date and time the representative was approved or rejected |
+| `reviewedAt` | `Date` | No | Date and time the representative's registration was approved or rejected |
 | `rejectionReason` | `String` | No | Optional reason for rejecting a representative account |
 | `createdAt` | `Date` | Automatic | Date and time the account was created |
 | `updatedAt` | `Date` | Automatic | Date and time the account was last updated |
@@ -53,7 +53,8 @@ Recommended indexes:
 
 ```javascript
 { email: 1 } // unique
-{ companyId: 1, role: 1, approvalStatus: 1 }
+{ role: 1, approvalStatus: 1 }
+{ companyId: 1, role: 1 }
 ```
 
 Example registered user:
@@ -219,9 +220,9 @@ The actual values belong in the private `.env` file. If these variable names are
 | Requirement | Database support |
 | --- | --- |
 | AR1: Representative registration | `users.role`, `users.companyId`, and `users.approvalStatus` |
-| AR2: Admin approval or rejection | `approvalStatus`, `approvedAt`, and `rejectionReason` |
+| AR2: Admin approval or rejection | `approvalStatus`, `reviewedAt`, and `rejectionReason` |
 | AR3: Representative CRUD for own-company sessions | `interviewSessions.companyId` |
-| AR4: Session time, date, overlap, and capacity validation | `startAt`, `endAt`, `capacity`, and session indexes |
+| AR4: Session time, date, overlap, and capacity validation | `startAt`, `endAt`, and `capacity`; overlap is validated in the application |
 | AR5: Representative views own-company candidates | Join `interviewBookings` to `interviewSessions` and `users`, restricted by `companyId` |
 | AR6: User check-in and representative status updates | `status` and `checkedInAt` |
 | AR7: Admin manages representative accounts | Representative approval and company-association fields in `users` |
