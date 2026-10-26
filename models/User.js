@@ -36,7 +36,7 @@ const UserSchema = new mongoose.Schema({
         enum: ['user', 'admin', 'representative'],
         default: 'user'
     },
-    companyID: {
+    companyId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Company',
         required: function () {
