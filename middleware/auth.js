@@ -9,19 +9,33 @@ exports.protect = async (req, res, next) => {
         token = req.headers.authorization.split(' ')[1];
     }
 
+    // 2. If no Bearer token, read token from HTTP-only cookie
+    if (!token && req.cookies) {
+        token = req.cookies.token;
+    }
+
     //Make sure token exists
-    if (!token) {
+    if (!token || token === 'none') {
         return res.status(401).json({ success: false, message: 'Not authorize to access this route' });
     }
 
     try {
         //Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log(decoded);
-        req.user = await User.findById(decoded.id);
+
+        // Find the authenticated user
+        const user = await User.findById(decoded.id);
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'User not found or not authorized'
+            });
+        }
+
+        req.user = user;
         next();
     } catch (err) {
-        console.log(err.stack);
         return res.status(401).json({ success: false, message: 'Not authorize to access this route' });
     }
 }

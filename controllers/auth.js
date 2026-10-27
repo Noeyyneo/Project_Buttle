@@ -11,7 +11,7 @@ exports.register = async (req, res, next) => {
             telephone,
             email,
             password,
-            role = 'user',
+            role,
             companyId
         } = req.body;
         //Validate required fields
@@ -21,8 +21,18 @@ exports.register = async (req, res, next) => {
                 msg: 'Please provide name, telephone, email and password'
             });
         }
+
+        //Only allow public registration for user and representative roles
+        if (role && !['user', 'representative'].includes(role)) {
+            return res.status(400).json({
+                success: false,
+                msg: 'Invalid role for public registration'
+            });
+        }
+        const assignedRole = role || 'user';
+
         //Validate company for representative
-        if (role === 'representative') {
+        if (assignedRole === 'representative') {
             if (!companyId) {
                 return res.status(400).json({
                     success: false,
@@ -39,7 +49,7 @@ exports.register = async (req, res, next) => {
             }
         }
         //Normal user cannot have companyId
-        if (role === 'user' && companyId) {
+        if (assignedRole === 'user' && companyId) {
             return res.status(400).json({
                 success: false,
                 msg: 'Only representatives can have company'
@@ -66,10 +76,10 @@ exports.register = async (req, res, next) => {
             telephone,
             email: normalizedEmail,
             passwordHash: password,
-            role
+            role: assignedRole
         };
 
-        if (role === 'representative') {
+        if (assignedRole === 'representative') {
             userData.companyId = companyId,
                 userData.approvalStatus = 'pending';
         }
@@ -91,6 +101,56 @@ exports.register = async (req, res, next) => {
             success: false,
             msg: err.message
         });
+    }
+};
+
+//@desc Create an admin account
+//@route POST /api/v1/auth/admins
+//@access Private/Admin
+exports.createAdmin = async (req, res, next) => {
+    try {
+        const { name, telephone, email, password } = req.body;
+
+        if(!name || !telephone || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                msg: 'Please provide name, telephone, email and password'
+            });
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+
+        const existingUser = await User.findOne({
+            email: normalizedEmail
+        });
+
+        if(existingUser) {
+            return res.status(400).json({
+                success: false,
+                msg: 'Email is already registered'
+            });
+        }
+
+        const user = await User.create({
+            name,
+            telephone,
+            email: normalizedEmail,
+            passwordHash: password,
+            role: 'admin'
+        });
+
+        res.status(201).json({
+            success: true,
+            msg: 'Admin account created successfully',
+            data: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+        });
+    } catch (err) {
+        next (err);
     }
 };
 
@@ -176,9 +236,10 @@ exports.login = async (req, res, next) => {
 //@route POST /api/v1/auth/Logout
 //@access Private
 exports.logout = async (req, res, next) => {
-    res.cookie('token', 'none', {
-        expires: new Date(Date.now()+10*1000),
-        httpOnly: true
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
     });
 
     res.status(200).json({
