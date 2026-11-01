@@ -98,7 +98,7 @@ exports.deleteCompany = async (req, res, next) => {
                 msg: `Company not found with id of ${req.params.id}`
             });
         }
-        await Session.deleteMany({ company: req.params.id });
+        await Session.deleteMany({ companyId: req.params.id });
         await Company.deleteOne({ _id: req.params.id });
         res.status(200).json({ success: true, data: {} });
     } catch (err) {

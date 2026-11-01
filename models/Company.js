@@ -15,10 +15,9 @@ const CompanySchema = new mongoose.Schema({
     website: {
         type: String,
         trim: true,
+        required: [true, 'Please add a website'],
         validate: {
             validator: function (value) {
-                if (!value) return true;
-
                 try {
                     new URL(value);
                     return true;

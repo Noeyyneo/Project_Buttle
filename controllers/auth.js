@@ -111,7 +111,7 @@ exports.createAdmin = async (req, res, next) => {
     try {
         const { name, telephone, email, password } = req.body;
 
-        if(!name || !telephone || !email || !password) {
+        if (!name || !telephone || !email || !password) {
             return res.status(400).json({
                 success: false,
                 msg: 'Please provide name, telephone, email and password'
@@ -124,7 +124,7 @@ exports.createAdmin = async (req, res, next) => {
             email: normalizedEmail
         });
 
-        if(existingUser) {
+        if (existingUser) {
             return res.status(400).json({
                 success: false,
                 msg: 'Email is already registered'
@@ -150,7 +150,7 @@ exports.createAdmin = async (req, res, next) => {
             }
         });
     } catch (err) {
-        next (err);
+        next(err);
     }
 };
 
@@ -236,16 +236,24 @@ exports.login = async (req, res, next) => {
 //@route POST /api/v1/auth/Logout
 //@access Private
 exports.logout = async (req, res, next) => {
-    res.clearCookie('token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax'
-    });
+    try {
+        //Invalidate all existing JETs for this user
+        req.user.tokenVersion += 1;
+        await req.user.save();
 
-    res.status(200).json({
-        success: true,
-        msg: 'User logged out successfully'
-    })
+        res.clearCookie('token', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
+        });
+
+        res.status(200).json({
+            success: true,
+            msg: 'User logged out successfully'
+        });
+    } catch (err) {
+        next(err);
+    }
 }
 
 //@desc Get current Logged in user
