@@ -33,6 +33,13 @@ exports.protect = async (req, res, next) => {
             });
         }
 
+        if (decoded.tokenVersion !== user.tokenVersion) {
+            return res.status(401).json({
+                success: false,
+                message: 'Token is no longer valid. Please log in again.'
+            });
+        }
+
         req.user = user;
         next();
     } catch (err) {
