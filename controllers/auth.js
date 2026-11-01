@@ -238,8 +238,10 @@ exports.login = async (req, res, next) => {
 exports.logout = async (req, res, next) => {
     try {
         //Invalidate all existing JETs for this user
-        req.user.tokenVersion += 1;
-        await req.user.save();
+        await User.updateOne(
+            { _id: req.user._id },
+            { $inc: { tokenVersion: 1 } }
+        );
 
         res.clearCookie('token', {
             httpOnly: true,
