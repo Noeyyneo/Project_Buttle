@@ -1,22 +1,30 @@
-function requireApprovedRepresentative(req,res,next) {
-    if(!req.user) {
+function requireApprovedRepresentative(req, res, next) {
+    if (!req.user) {
         return res.status(401).json({
-            success:false,
-            message:`Authentication required`
+            success: false,
+            message: 'Authentication required'
         });
     }
-    if(req.user.role !== 'representative') {
+
+    // Admins are not representative accounts and do not require approval.
+    if (req.user.role === 'admin') {
+        return next();
+    }
+
+    if (req.user.role !== 'representative') {
         return res.status(403).json({
             success: false,
-            message: `representative role account required`
+            message: 'Representative role account required'
         });
     }
-    if(req.user.approvalStatus !== 'approved') {
+
+    if (req.user.approvalStatus !== 'approved') {
         return res.status(403).json({
-            success:false,
-            message:`Representative account is not approved`
-        })
+            success: false,
+            message: 'Representative account is not approved'
+        });
     }
+
     next();
 }
 
