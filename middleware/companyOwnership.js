@@ -11,7 +11,9 @@ function companyOwnership(paramName = 'companyId') {
             return next();
         }
 
-        if (!req.user.companyId) {
+        const userCompanyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!userCompanyId) {
             return res.status(403).json({
                 success: false,
                 message: 'Company access is required'
@@ -27,7 +29,7 @@ function companyOwnership(paramName = 'companyId') {
             });
         }
 
-        if (req.user.companyId.toString() !== requestedCompanyId.toString()) {
+        if (userCompanyId.toString() !== requestedCompanyId.toString()) {
             return res.status(403).json({
                 success: false,
                 message: 'No permission to access another company'
