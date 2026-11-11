@@ -70,9 +70,6 @@ const UserSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: null,
-        required: function () {
-            return this.role === 'representative' && this.approvalStatus === 'rejected';
-        },
         validate: {
             validator: function (value) {
                 return this.role === 'representative' || value == null;
