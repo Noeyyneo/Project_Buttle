@@ -44,7 +44,11 @@ const UserSchema = new mongoose.Schema({
         },
         validate: {
             validator: function (value) {
-                return this.role === 'representative' || value == null;
+                const role = this instanceof mongoose.Query
+                    ? this.getQuery().role
+                    : this.role;
+
+                return role === 'representative' || value == null;
             },
             message: 'Only representatives can have a company'
         }
@@ -57,7 +61,11 @@ const UserSchema = new mongoose.Schema({
         },
         validate: {
             validator: function (value) {
-                return this.role === 'representative' || value == null;
+                const role = this instanceof mongoose.Query
+                    ? this.getQuery().role
+                    : this.role;
+
+                return role === 'representative' || value == null;
             },
             message: 'Only representative can have a approval status'
         }
@@ -72,7 +80,11 @@ const UserSchema = new mongoose.Schema({
         default: null,
         validate: {
             validator: function (value) {
-                return this.role === 'representative' || value == null;
+                const role = this instanceof mongoose.Query
+                    ? this.getQuery().role
+                    : this.role;
+
+                return role === 'representative' || value == null;
             },
             message: 'Only representatives can have rejection reason'
         }
