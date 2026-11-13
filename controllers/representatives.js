@@ -32,7 +32,7 @@ exports.getRepresentative = async (req, res, next) => {
         if (!mongoose.isValidObjectId(req.params.id)) {
             return res.status(404).json({
                 success: false,
-                msg: `No representative with the id of ${req.params.id}`
+                message: `No representative with the id of ${req.params.id}`
             });
         }
 
@@ -46,7 +46,7 @@ exports.getRepresentative = async (req, res, next) => {
         if (!representative) {
             return res.status(404).json({
                 success: false,
-                msg: `No representative with the id of ${req.params.id}`
+                message: `No representative with the id of ${req.params.id}`
             });
         }
 
@@ -67,7 +67,7 @@ exports.updateRepresentative = async (req, res, next) => {
         if (!mongoose.isValidObjectId(req.params.id)) {
             return res.status(404).json({
                 success: false,
-                msg: `No representative with the id of ${req.params.id}`
+                message: `No representative with the id of ${req.params.id}`
             });
         }
 
@@ -80,7 +80,7 @@ exports.updateRepresentative = async (req, res, next) => {
         ) {
             return res.status(400).json({
                 success: false,
-                msg: 'Please provide approvalStatus, companyId or rejectionReason'
+                message: 'Please provide approvalStatus, companyId or rejectionReason'
             });
         }
 
@@ -90,7 +90,7 @@ exports.updateRepresentative = async (req, res, next) => {
         ) {
             return res.status(400).json({
                 success: false,
-                msg: 'approvalStatus must be pending, approved or rejected'
+                message: 'approvalStatus must be pending, approved or rejected'
             });
         }
 
@@ -101,7 +101,7 @@ exports.updateRepresentative = async (req, res, next) => {
         ) {
             return res.status(400).json({
                 success: false,
-                msg: 'rejectionReason must be a string'
+                message: 'rejectionReason must be a string'
             });
         }
 
@@ -114,7 +114,7 @@ exports.updateRepresentative = async (req, res, next) => {
             if (!mongoose.isValidObjectId(companyId)) {
                 return res.status(400).json({
                     success: false,
-                    msg: 'Invalid companyId'
+                    message: 'Invalid companyId'
                 });
             }
 
@@ -123,7 +123,7 @@ exports.updateRepresentative = async (req, res, next) => {
             if (!company) {
                 return res.status(404).json({
                     success: false,
-                    msg: `No company with the id of ${companyId}`
+                    message: `No company with the id of ${companyId}`
                 });
             }
         }
@@ -136,7 +136,7 @@ exports.updateRepresentative = async (req, res, next) => {
         if (!representative) {
             return res.status(404).json({
                 success: false,
-                msg: `No representative with the id of ${req.params.id}`
+                message: `No representative with the id of ${req.params.id}`
             });
         }
 
@@ -149,6 +149,9 @@ exports.updateRepresentative = async (req, res, next) => {
         const statusChanged =
             approvalStatus !== undefined &&
             representative.approvalStatus !== approvalStatus;
+        const companyChanged =
+            companyId !== undefined &&
+            representative.companyId.toString() !== companyId.toString();
 
         if (approvalStatus !== undefined) {
 
@@ -164,7 +167,7 @@ exports.updateRepresentative = async (req, res, next) => {
             if (representative.approvalStatus !== 'rejected') {
                 return res.status(400).json({
                     success: false,
-                    msg: 'rejectionReason can be updated only for a rejected representative'
+                    message: 'rejectionReason can be updated only for a rejected representative'
                 });
             }
 
@@ -173,7 +176,7 @@ exports.updateRepresentative = async (req, res, next) => {
 
         const updateOperation = { $set: updateData };
 
-        if (statusChanged) {
+        if (statusChanged || companyChanged) {
             updateOperation.$inc = { tokenVersion: 1 };
         }
 
