@@ -44,7 +44,11 @@ const UserSchema = new mongoose.Schema({
         },
         validate: {
             validator: function (value) {
-                return this.role === 'representative' || value == null;
+                const role = this instanceof mongoose.Query
+                    ? this.getQuery().role
+                    : this.role;
+
+                return role === 'representative' || value == null;
             },
             message: 'Only representatives can have a company'
         }
@@ -57,7 +61,11 @@ const UserSchema = new mongoose.Schema({
         },
         validate: {
             validator: function (value) {
-                return this.role === 'representative' || value == null;
+                const role = this instanceof mongoose.Query
+                    ? this.getQuery().role
+                    : this.role;
+
+                return role === 'representative' || value == null;
             },
             message: 'Only representative can have a approval status'
         }
@@ -70,12 +78,13 @@ const UserSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: null,
-        required: function () {
-            return this.role === 'representative' && this.approvalStatus === 'rejected';
-        },
         validate: {
             validator: function (value) {
-                return this.role === 'representative' || value == null;
+                const role = this instanceof mongoose.Query
+                    ? this.getQuery().role
+                    : this.role;
+
+                return role === 'representative' || value == null;
             },
             message: 'Only representatives can have rejection reason'
         }
@@ -91,6 +100,10 @@ const UserSchema = new mongoose.Schema({
 
 //Encrypt password using bcrypt
 UserSchema.pre('save', async function (next) {
+    if (!this.isModified('passwordHash')) {
+        return next();
+    }
+
     const salt = await bcrypt.genSalt(10);
     this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
 });

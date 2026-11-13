@@ -11,6 +11,7 @@ dotenv.config({path: './.env'})
 const auth = require('./routes/auth');
 const companies = require('./routes/companies');
 const interviewSessions = require('./routes/interviewSessions');
+const representatives = require('./routes/representatives');
 const cookieParser = require('cookie-parser');
 
 const app = express();
@@ -29,6 +30,7 @@ app.use(cookieParser());
 app.use('/api/v1/auth', auth);
 app.use('/api/v1/companies', companies);
 app.use('/api/v1/interviewSessions', interviewSessions);
+app.use('/api/v1/admin/representatives', representatives);
 
 const PORT = process.env.PORT || 3000;
 
