@@ -28,4 +28,13 @@ function requireApprovedRepresentative(req, res, next) {
     next();
 }
 
+function requireApprovedRepresentativeWhenApplicable(req, res, next) {
+    if (req.user?.role !== 'representative') {
+        return next();
+    }
+
+    return requireApprovedRepresentative(req, res, next);
+}
+
 module.exports = requireApprovedRepresentative;
+module.exports.whenApplicable = requireApprovedRepresentativeWhenApplicable;
