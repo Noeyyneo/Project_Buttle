@@ -5,14 +5,16 @@ const dotenv = require('dotenv');
 const connectDatabase = require('./config/database');
 
 //Load env vars
-dotenv.config({path: './.env'})
+dotenv.config({ path: './.env' })
 
 //Route files
 const auth = require('./routes/auth');
 const companies = require('./routes/companies');
 const interviewSessions = require('./routes/interviewSessions');
 const representatives = require('./routes/representatives');
+const interviewBookings = require('./routes/interviewBookings');
 const cookieParser = require('cookie-parser');
+
 
 const app = express();
 
@@ -29,7 +31,8 @@ app.use(cookieParser());
 //Mount routers
 app.use('/api/v1/auth', auth);
 app.use('/api/v1/companies', companies);
-app.use('/api/v1/interviewSessions', interviewSessions);
+app.use('/api/v1/sessions', interviewSessions);
+app.use('/api/v1/bookings', interviewBookings);
 app.use('/api/v1/admin/representatives', representatives);
 
 const PORT = process.env.PORT || 3000;
