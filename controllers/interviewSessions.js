@@ -16,7 +16,10 @@ function canAccessSession(req, session) {
         return true;
     }
 
-    return session.companyId.toString() === req.user.companyId.toString();
+    const sessionCompanyId = session.companyId?._id || session.companyId;
+    const userCompanyId = req.user.companyId?._id || req.user.companyId;
+
+    return sessionCompanyId.toString() === userCompanyId.toString();
 }
 
 function sessionData(body, existing = {}) {
