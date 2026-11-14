@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const Company = require('../models/Company');
 const InterviewSession = require('../models/InterviewSession');
 const InterviewBooking = require('../models/InterviewBooking');
 const { BOOKING_STATUSES } = InterviewBooking;
@@ -39,7 +40,7 @@ function sessionData(body, existing = {}) {
     };
 }
 
-async function overlapsAnotherSession(companyId, startAt, endAt, sessionId) {
+async function overlapsAnotherSession(companyId, startAt, endAt, sessionId, databaseSession) {
     const query = {
         companyId,
         startAt: { $lt: new Date(endAt) },
@@ -50,7 +51,45 @@ async function overlapsAnotherSession(companyId, startAt, endAt, sessionId) {
         query._id = { $ne: sessionId };
     }
 
-    return Boolean(await InterviewSession.exists(query));
+    const overlapQuery = InterviewSession.exists(query);
+
+    if (databaseSession) {
+        overlapQuery.session(databaseSession);
+    }
+
+    return Boolean(await overlapQuery);
+}
+
+function sessionValidationProblem(message) {
+    const error = new Error(message);
+    error.code = 'SESSION_VALIDATION';
+    return error;
+}
+
+async function runWithCompanyScheduleLock(companyId, operation) {
+    const databaseSession = await mongoose.startSession();
+
+    try {
+        let result;
+
+        await databaseSession.withTransaction(async () => {
+            const company = await Company.findByIdAndUpdate(
+                companyId,
+                { $set: { updatedAt: new Date() } },
+                { new: false, session: databaseSession }
+            );
+
+            if (!company) {
+                throw new Error('Company not found');
+            }
+
+            result = await operation(databaseSession);
+        });
+
+        return result;
+    } finally {
+        await databaseSession.endSession();
+    }
 }
 
 function validationError(res, message) {
@@ -114,19 +153,27 @@ exports.createInterviewSession = async (req, res, next) => {
             return validationError(res, error);
         }
 
-        if (await overlapsAnotherSession(req.user.companyId, startAt, endAt)) {
-            return validationError(res, 'Interview sessions for the same company must not overlap');
-        }
+        const session = await runWithCompanyScheduleLock(req.user.companyId, async databaseSession => {
+            if (await overlapsAnotherSession(req.user.companyId, startAt, endAt, null, databaseSession)) {
+                throw sessionValidationProblem('Interview sessions for the same company must not overlap');
+            }
 
-        const session = await InterviewSession.create({
-            companyId: req.user.companyId,
-            startAt,
-            endAt,
-            capacity
+            const [createdSession] = await InterviewSession.create([{
+                companyId: req.user.companyId,
+                startAt,
+                endAt,
+                capacity
+            }], { session: databaseSession });
+
+            return createdSession;
         });
 
         res.status(201).json({ success: true, data: session });
     } catch (err) {
+        if (err.code === 'SESSION_VALIDATION') {
+            return validationError(res, err.message);
+        }
+
         next(err);
     }
 };
@@ -159,26 +206,33 @@ exports.updateInterviewSession = async (req, res, next) => {
             return validationError(res, error);
         }
 
-        if (await overlapsAnotherSession(session.companyId, startAt, endAt, session._id)) {
-            return validationError(res, 'Interview sessions for the same company must not overlap');
-        }
+        const updatedSession = await runWithCompanyScheduleLock(session.companyId, async databaseSession => {
+            if (await overlapsAnotherSession(session.companyId, startAt, endAt, session._id, databaseSession)) {
+                throw sessionValidationProblem('Interview sessions for the same company must not overlap');
+            }
 
-        const participantCount = await InterviewBooking.countDocuments({
-            sessionId: session._id,
-            status: { $ne: 'cancelled' }
-        });
+            const participantCount = await InterviewBooking.countDocuments({
+                sessionId: session._id,
+                status: { $ne: 'cancelled' }
+            }).session(databaseSession);
 
-        if (capacity < participantCount) {
-            return validationError(res, 'Capacity cannot be lower than the current participant count');
-        }
+            if (capacity < participantCount) {
+                throw sessionValidationProblem('Capacity cannot be lower than the current participant count');
+            }
 
-        const updatedSession = await InterviewSession.findByIdAndUpdate(req.params.id, data, {
-            new: true,
-            runValidators: true
+            return InterviewSession.findByIdAndUpdate(req.params.id, data, {
+                new: true,
+                runValidators: true,
+                session: databaseSession
+            });
         });
 
         res.status(200).json({ success: true, data: updatedSession });
     } catch (err) {
+        if (err.code === 'SESSION_VALIDATION') {
+            return validationError(res, err.message);
+        }
+
         next(err);
     }
 };
