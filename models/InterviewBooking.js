@@ -31,7 +31,7 @@ const interviewBookingSchema = new mongoose.Schema({
     }
 }, {
     timestamps: true,
-    collection: 'interviewBookings'
+    collection: 'interviewbookings'
 });
 
 interviewBookingSchema.index({ userId: 1, sessionId: 1 }, { unique: true });
