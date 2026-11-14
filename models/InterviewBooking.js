@@ -28,4 +28,9 @@ const BookingSchema = new mongoose.Schema({
         default: null
     }
 });
+// Compound unique index: user cannot book the same session more than once
+BookingSchema.index({ userId: 1, sessionId: 1 }, { unique: true });
+BookingSchema.index({ sessionId: 1, status: 1 });
+BookingSchema.index({ userId: 1, status: 1 });
+
 module.exports = mongoose.model('InterviewBooking', BookingSchema);

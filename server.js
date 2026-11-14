@@ -31,7 +31,7 @@ app.use(cookieParser());
 //Mount routers
 app.use('/api/v1/auth', auth);
 app.use('/api/v1/companies', companies);
-app.use('/api/v1/sessions', interviewSessions);
+app.use('/api/v1/interviewSessions', interviewSessions);
 app.use('/api/v1/bookings', interviewBookings);
 app.use('/api/v1/admin/representatives', representatives);
 
