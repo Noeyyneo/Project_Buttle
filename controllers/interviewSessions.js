@@ -11,14 +11,12 @@ function isRepresentative(req) {
     return req.user?.role === 'representative';
 }
 
-function ownedSessionQuery(req, id) {
-    const query = { _id: id };
-
-    if (isRepresentative(req)) {
-        query.companyId = req.user.companyId;
+function canAccessSession(req, session) {
+    if (!isRepresentative(req)) {
+        return true;
     }
 
-    return query;
+    return session.companyId.toString() === req.user.companyId.toString();
 }
 
 function sessionData(body, existing = {}) {
@@ -60,6 +58,9 @@ function notFound(res, message = 'Interview session not found') {
     return res.status(404).json({ success: false, message });
 }
 
+//@desc Get all interview sessions available to the authenticated user
+//@route GET /api/v1/interviewSessions
+//@access Private
 exports.getInterviewSessions = async (req, res, next) => {
     try {
         const query = isRepresentative(req) ? { companyId: req.user.companyId } : {};
@@ -74,18 +75,21 @@ exports.getInterviewSessions = async (req, res, next) => {
     }
 };
 
+//@desc Get one interview session
+//@route GET /api/v1/interviewSessions/:id
+//@access Private
 exports.getInterviewSession = async (req, res, next) => {
     try {
         if (!mongoose.isValidObjectId(req.params.id)) {
             return notFound(res);
         }
 
-        const session = await InterviewSession.findOne(ownedSessionQuery(req, req.params.id)).populate({
+        const session = await InterviewSession.findById(req.params.id).populate({
             path: 'companyId',
             select: 'name address description telephone website'
         });
 
-        if (!session) {
+        if (!session || !canAccessSession(req, session)) {
             return notFound(res);
         }
 
@@ -95,6 +99,9 @@ exports.getInterviewSession = async (req, res, next) => {
     }
 };
 
+//@desc Create an interview session for the representative's company
+//@route POST /api/v1/interviewSessions
+//@access Private/Representative
 exports.createInterviewSession = async (req, res, next) => {
     try {
         const { startAt, endAt, capacity } = sessionData(req.body || {});
@@ -121,15 +128,19 @@ exports.createInterviewSession = async (req, res, next) => {
     }
 };
 
+//@desc Update an own-company interview session
+//@route PUT /api/v1/interviewSessions/:id
+//@access Private/Representative
 exports.updateInterviewSession = async (req, res, next) => {
     try {
         if (!mongoose.isValidObjectId(req.params.id)) {
             return notFound(res);
         }
 
-        const session = await InterviewSession.findOne(ownedSessionQuery(req, req.params.id));
+        const session = await InterviewSession.findById(req.params.id);
 
-        if (!session) {
+        // Make sure representative owns the interview session's company.
+        if (!session || !canAccessSession(req, session)) {
             return notFound(res);
         }
 
@@ -158,26 +169,34 @@ exports.updateInterviewSession = async (req, res, next) => {
             return validationError(res, 'Capacity cannot be lower than the current participant count');
         }
 
-        Object.assign(session, data);
-        await session.save();
+        const updatedSession = await InterviewSession.findByIdAndUpdate(req.params.id, data, {
+            new: true,
+            runValidators: true
+        });
 
-        res.status(200).json({ success: true, data: session });
+        res.status(200).json({ success: true, data: updatedSession });
     } catch (err) {
         next(err);
     }
 };
 
+//@desc Delete an own-company interview session
+//@route DELETE /api/v1/interviewSessions/:id
+//@access Private/Representative
 exports.deleteInterviewSession = async (req, res, next) => {
     try {
         if (!mongoose.isValidObjectId(req.params.id)) {
             return notFound(res);
         }
 
-        const session = await InterviewSession.findOneAndDelete(ownedSessionQuery(req, req.params.id));
+        const session = await InterviewSession.findById(req.params.id);
 
-        if (!session) {
+        // Make sure representative owns the interview session's company.
+        if (!session || !canAccessSession(req, session)) {
             return notFound(res);
         }
+
+        await session.deleteOne();
 
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
@@ -185,15 +204,18 @@ exports.deleteInterviewSession = async (req, res, next) => {
     }
 };
 
+//@desc Get candidates for an own-company interview session
+//@route GET /api/v1/interviewSessions/:id/candidates
+//@access Private/Representative
 exports.getSessionCandidates = async (req, res, next) => {
     try {
         if (!mongoose.isValidObjectId(req.params.id)) {
             return notFound(res);
         }
 
-        const session = await InterviewSession.findOne(ownedSessionQuery(req, req.params.id));
+        const session = await InterviewSession.findById(req.params.id);
 
-        if (!session) {
+        if (!session || !canAccessSession(req, session)) {
             return notFound(res);
         }
 
@@ -206,6 +228,9 @@ exports.getSessionCandidates = async (req, res, next) => {
     }
 };
 
+//@desc Update a candidate status for an own-company interview session
+//@route PATCH /api/v1/interviewSessions/:id/bookings/:bookingId/status
+//@access Private/Representative
 exports.updateBookingStatus = async (req, res, next) => {
     try {
         const { id, bookingId } = req.params;
@@ -219,9 +244,9 @@ exports.updateBookingStatus = async (req, res, next) => {
             return validationError(res, 'status must be checked_in, completed, cancelled or no_show');
         }
 
-        const session = await InterviewSession.findOne(ownedSessionQuery(req, id));
+        const session = await InterviewSession.findById(id);
 
-        if (!session) {
+        if (!session || !canAccessSession(req, session)) {
             return notFound(res);
         }
 

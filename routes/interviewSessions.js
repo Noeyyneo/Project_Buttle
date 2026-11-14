@@ -11,7 +11,7 @@ const {
 const { protect, authorize } = require('../middleware/auth');
 const requireApprovedRepresentative = require('../middleware/requireApprovedRepresentative');
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 router.route('/')
     .get(protect, getInterviewSessions)
