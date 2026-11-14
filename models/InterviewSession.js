@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { isEventDate } = require('../lib/interviewSessionRules');
 
 const SessionSchema = new mongoose.Schema({
     companyId: {
@@ -10,12 +11,7 @@ const SessionSchema = new mongoose.Schema({
         type: Date,
         required: [true, 'Please add start date and time'],
         validate: {
-            validator: function (value) {
-                const start = new Date('2022-05-10T00:00:00.000Z');
-                const end = new Date('2022-05-14T00:00:00.000Z');
-
-                return value >= start && value < end;
-            },
+            validator: isEventDate,
             msg: 'Start time must fall within May 10-13, 2022'
         }
     },
@@ -24,12 +20,7 @@ const SessionSchema = new mongoose.Schema({
         required: [true, 'Please add end date and time'],
         validate: [
             {
-                validator: function (value) {
-                    const start = new Date('2022-05-10T00:00:00.000Z');
-                    const end = new Date('2022-05-14T00:00:00.000Z');
-
-                    return value >= start && value < end;
-                },
+                validator: isEventDate,
                 msg: 'End time must fall within May 10-13, 2022'
             }, {
                 validator: function (value) {
@@ -41,7 +32,12 @@ const SessionSchema = new mongoose.Schema({
     },
     capacity: {
         type: Number,
-        required: [true, 'Please add a capacity']
+        required: [true, 'Please add a capacity'],
+        validate: {
+            validator: Number.isInteger,
+            msg: 'Capacity must be a positive integer'
+        },
+        min: [1, 'Capacity must be a positive integer']
     }
 }, {
     timestamps: true,
