@@ -2,10 +2,9 @@ const mongoose = require('mongoose');
 const Company = require('../models/Company');
 const InterviewSession = require('../models/InterviewSession');
 const InterviewBooking = require('../models/InterviewBooking');
-const { BOOKING_STATUSES } = InterviewBooking;
 const { validateSessionData } = require('../lib/interviewSessionRules');
 
-const REPRESENTATIVE_STATUSES = BOOKING_STATUSES.filter(status => status !== 'booked');
+const REPRESENTATIVE_STATUSES = ['checked_in', 'completed', 'cancelled', 'no_show'];
 const SESSION_FIELDS = ['startAt', 'endAt', 'capacity'];
 
 function isRepresentative(req) {
@@ -18,7 +17,11 @@ function canAccessSession(req, session) {
     }
 
     const sessionCompanyId = session.companyId?._id || session.companyId;
-    const userCompanyId = req.user.companyId?._id || req.user.companyId;
+    const userCompanyId = req.user?.companyId?._id || req.user?.companyId;
+
+    if (!sessionCompanyId || !userCompanyId) {
+        return false;
+    }
 
     return sessionCompanyId.toString() === userCompanyId.toString();
 }
@@ -66,6 +69,12 @@ function sessionValidationProblem(message) {
     return error;
 }
 
+function notFoundProblem(message) {
+    const error = new Error(message);
+    error.code = 'SESSION_NOT_FOUND';
+    return error;
+}
+
 async function runWithCompanyScheduleLock(companyId, operation) {
     const databaseSession = await mongoose.startSession();
 
@@ -80,10 +89,36 @@ async function runWithCompanyScheduleLock(companyId, operation) {
             );
 
             if (!company) {
-                throw new Error('Company not found');
+                throw notFoundProblem('Company not found');
             }
 
             result = await operation(databaseSession);
+        });
+
+        return result;
+    } finally {
+        await databaseSession.endSession();
+    }
+}
+
+async function runWithSessionBookingLock(sessionId, operation) {
+    const databaseSession = await mongoose.startSession();
+
+    try {
+        let result;
+
+        await databaseSession.withTransaction(async () => {
+            const session = await InterviewSession.findByIdAndUpdate(
+                sessionId,
+                { $set: { updatedAt: new Date() } },
+                { new: true, session: databaseSession }
+            );
+
+            if (!session) {
+                throw notFoundProblem();
+            }
+
+            result = await operation(session, databaseSession);
         });
 
         return result;
@@ -174,6 +209,10 @@ exports.createInterviewSession = async (req, res, next) => {
             return validationError(res, err.message);
         }
 
+        if (err.code === 'SESSION_NOT_FOUND') {
+            return notFound(res, err.message);
+        }
+
         next(err);
     }
 };
@@ -233,6 +272,10 @@ exports.updateInterviewSession = async (req, res, next) => {
             return validationError(res, err.message);
         }
 
+        if (err.code === 'SESSION_NOT_FOUND') {
+            return notFound(res, err.message);
+        }
+
         next(err);
     }
 };
@@ -251,6 +294,11 @@ exports.deleteInterviewSession = async (req, res, next) => {
         // Make sure representative owns the interview session's company.
         if (!session || !canAccessSession(req, session)) {
             return notFound(res);
+        }
+
+        const bookingCount = await InterviewBooking.countDocuments({ sessionId: session._id });
+        if (bookingCount > 0) {
+            return validationError(res, 'Cannot delete an interview session with existing bookings');
         }
 
         await session.deleteOne();
@@ -307,23 +355,47 @@ exports.updateBookingStatus = async (req, res, next) => {
             return notFound(res);
         }
 
-        const update = { status };
-        if (status === 'checked_in') {
-            update.checkedInAt = new Date();
-        }
+        const booking = await runWithSessionBookingLock(session._id, async (lockedSession, databaseSession) => {
+            const existingBooking = await InterviewBooking.findOne({
+                _id: bookingId,
+                sessionId: lockedSession._id
+            }).session(databaseSession);
 
-        const booking = await InterviewBooking.findOneAndUpdate(
-            { _id: bookingId, sessionId: session._id },
-            { $set: update },
-            { new: true, runValidators: true }
-        ).populate('userId', 'name telephone email');
+            if (!existingBooking) {
+                throw notFoundProblem('Interview booking not found');
+            }
 
-        if (!booking) {
-            return res.status(404).json({ success: false, message: 'Interview booking not found' });
-        }
+            if (existingBooking.status === 'cancelled' && status !== 'cancelled') {
+                const participantCount = await InterviewBooking.countDocuments({
+                    sessionId: lockedSession._id,
+                    _id: { $ne: existingBooking._id },
+                    status: { $ne: 'cancelled' }
+                }).session(databaseSession);
+
+                if (participantCount >= lockedSession.capacity) {
+                    throw sessionValidationProblem('Interview session is already at full capacity');
+                }
+            }
+
+            existingBooking.status = status;
+            if (status === 'checked_in') {
+                existingBooking.checkedInAt = new Date();
+            }
+
+            await existingBooking.save({ session: databaseSession });
+            return existingBooking.populate('userId', 'name telephone email');
+        });
 
         res.status(200).json({ success: true, data: booking });
     } catch (err) {
+        if (err.code === 'SESSION_VALIDATION') {
+            return validationError(res, err.message);
+        }
+
+        if (err.code === 'SESSION_NOT_FOUND') {
+            return notFound(res, err.message);
+        }
+
         next(err);
     }
 };
