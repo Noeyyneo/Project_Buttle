@@ -1,53 +1,447 @@
-const InterviewSession = require('../models/InterviewSession');
+const mongoose = require('mongoose');
 const Company = require('../models/Company');
+const InterviewSession = require('../models/InterviewSession');
+const InterviewBooking = require('../models/InterviewBooking');
+const { validateSessionData } = require('../lib/interviewSessionRules');
 
-//@desc Get all session
-//@route GET /api/v1/sessions
-//@access Public
+const REPRESENTATIVE_STATUSES = ['checked_in', 'completed', 'cancelled', 'no_show'];
+const SESSION_FIELDS = ['startAt', 'endAt', 'capacity'];
+
+function isRepresentative(req) {
+    return req.user?.role === 'representative';
+}
+
+function canAccessSession(req, session) {
+    if (!isRepresentative(req)) {
+        return true;
+    }
+
+    const sessionCompanyId = session.companyId?._id || session.companyId;
+    const userCompanyId = req.user?.companyId?._id || req.user?.companyId;
+
+    if (!sessionCompanyId || !userCompanyId) {
+        return false;
+    }
+
+    return sessionCompanyId.toString() === userCompanyId.toString();
+}
+
+function sessionData(body, existing = {}) {
+    const data = {};
+
+    for (const field of SESSION_FIELDS) {
+        if (body[field] !== undefined) {
+            data[field] = body[field];
+        }
+    }
+
+    return {
+        startAt: data.startAt ?? existing.startAt,
+        endAt: data.endAt ?? existing.endAt,
+        capacity: data.capacity ?? existing.capacity,
+        data
+    };
+}
+
+async function overlapsAnotherSession(companyId, startAt, endAt, sessionId, databaseSession) {
+    const query = {
+        companyId,
+        startAt: { $lt: new Date(endAt) },
+        endAt: { $gt: new Date(startAt) }
+    };
+
+    if (sessionId) {
+        query._id = { $ne: sessionId };
+    }
+
+    const overlapQuery = InterviewSession.exists(query);
+
+    if (databaseSession) {
+        overlapQuery.session(databaseSession);
+    }
+
+    return Boolean(await overlapQuery);
+}
+
+function sessionValidationProblem(message) {
+    const error = new Error(message);
+    error.code = 'SESSION_VALIDATION';
+    return error;
+}
+
+function notFoundProblem(message) {
+    const error = new Error(message);
+    error.code = 'SESSION_NOT_FOUND';
+    return error;
+}
+
+async function runWithCompanyScheduleLock(companyId, operation) {
+    const databaseSession = await mongoose.startSession();
+
+    try {
+        let result;
+
+        await databaseSession.withTransaction(async () => {
+            // A company write is the shared lock for its representatives' schedules.
+            const company = await Company.findByIdAndUpdate(
+                companyId,
+                { $set: { updatedAt: new Date() } },
+                { new: false, session: databaseSession }
+            );
+
+            if (!company) {
+                throw notFoundProblem('Company not found');
+            }
+
+            result = await operation(databaseSession);
+        });
+
+        return result;
+    } finally {
+        await databaseSession.endSession();
+    }
+}
+
+async function runWithSessionBookingLock(sessionId, operation) {
+    const databaseSession = await mongoose.startSession();
+
+    try {
+        let result;
+
+        await databaseSession.withTransaction(async () => {
+            const session = await InterviewSession.findByIdAndUpdate(
+                sessionId,
+                { $set: { updatedAt: new Date() } },
+                { new: true, session: databaseSession }
+            );
+
+            if (!session) {
+                throw notFoundProblem();
+            }
+
+            result = await operation(session, databaseSession);
+        });
+
+        return result;
+    } finally {
+        await databaseSession.endSession();
+    }
+}
+
+function validationError(res, message) {
+    return res.status(400).json({ success: false, message });
+}
+
+function notFound(res, message = 'Interview session not found') {
+    return res.status(404).json({ success: false, message });
+}
+
+function forbidden(res, message = 'No permission to access another company') {
+    return res.status(403).json({ success: false, message });
+}
+
+//@desc Get all interview sessions available to the authenticated user
+//@route GET /api/v1/interviewSessions
+//@access Private
 exports.getInterviewSessions = async (req, res, next) => {
     try {
-    const sessions = await InterviewSession.find().populate({
+        const query = isRepresentative(req)
+            ? { companyId: req.user.companyId }
+            : (req.params.companyId ? { companyId: req.params.companyId } : {});
+        const sessions = await InterviewSession.find(query).populate({
             path: 'companyId',
             select: 'name address description telephone website'
         });
 
-        res.status(200).json({
-            success: true,
-            count: sessions.length,
-            data: sessions
-        });
+        res.status(200).json({ success: true, count: sessions.length, data: sessions });
     } catch (err) {
-        return res.status(500).json({
-            success: false,
-            msg: 'Cannot find Session'
-        })
+        next(err);
     }
 };
 
-//@desc Get single session
-//@route GET /api/v1/session/:id
-//@access Public
+//@desc Get one interview session
+//@route GET /api/v1/interviewSessions/:id
+//@access Private
 exports.getInterviewSession = async (req, res, next) => {
     try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return notFound(res);
+        }
+
         const session = await InterviewSession.findById(req.params.id).populate({
             path: 'companyId',
             select: 'name address description telephone website'
         });
 
         if (!session) {
-            return res.status(404).json({
-                success: false,
-                msg: `No session with the id of ${req.params.id}`
-            });
+            return notFound(res);
         }
-        res.status(200).json({
-            success: true,
-            data: session
-        });
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
+        }
+
+        res.status(200).json({ success: true, data: session });
     } catch (err) {
-        return res.status(500).json({
-            success: false,
-            msg: 'Cannot find Session'
+        next(err);
+    }
+};
+
+//@desc Create an interview session for the representative's company
+//@route POST /api/v1/interviewSessions
+//@access Private/Representative
+exports.createInterviewSession = async (req, res, next) => {
+    try {
+        const { startAt, endAt, capacity } = sessionData(req.body || {});
+        const error = validateSessionData({ startAt, endAt, capacity });
+
+        if (error) {
+            return validationError(res, error);
+        }
+
+        const session = await runWithCompanyScheduleLock(req.user.companyId, async databaseSession => {
+            if (await overlapsAnotherSession(req.user.companyId, startAt, endAt, null, databaseSession)) {
+                throw sessionValidationProblem('Interview sessions for the same company must not overlap');
+            }
+
+            const [createdSession] = await InterviewSession.create([{
+                companyId: req.user.companyId,
+                startAt,
+                endAt,
+                capacity
+            }], { session: databaseSession });
+
+            return createdSession;
         });
+
+        await session.populate({
+            path: 'companyId',
+            select: 'name address description telephone website'
+        });
+
+        res.status(201).json({ success: true, data: session });
+    } catch (err) {
+        if (err.code === 'SESSION_VALIDATION') {
+            return validationError(res, err.message);
+        }
+
+        if (err.code === 'SESSION_NOT_FOUND') {
+            return notFound(res, err.message);
+        }
+
+        next(err);
+    }
+};
+
+//@desc Update an own-company interview session
+//@route PUT /api/v1/interviewSessions/:id
+//@access Private/Representative
+exports.updateInterviewSession = async (req, res, next) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return notFound(res);
+        }
+
+        const session = await InterviewSession.findById(req.params.id);
+
+        // Make sure representative owns the interview session's company.
+        if (!session) {
+            return notFound(res);
+        }
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
+        }
+
+        const { startAt, endAt, capacity, data } = sessionData(req.body || {}, session);
+
+        if (Object.keys(data).length === 0) {
+            return validationError(res, 'Please provide startAt, endAt or capacity');
+        }
+
+        const error = validateSessionData({ startAt, endAt, capacity });
+
+        if (error) {
+            return validationError(res, error);
+        }
+
+        const updatedSession = await runWithCompanyScheduleLock(session.companyId, async databaseSession => {
+            if (await overlapsAnotherSession(session.companyId, startAt, endAt, session._id, databaseSession)) {
+                throw sessionValidationProblem('Interview sessions for the same company must not overlap');
+            }
+
+            const participantCount = await InterviewBooking.countDocuments({
+                sessionId: session._id,
+                status: { $ne: 'cancelled' }
+            }).session(databaseSession);
+
+            if (capacity < participantCount) {
+                throw sessionValidationProblem('Capacity cannot be lower than the current participant count');
+            }
+
+            return InterviewSession.findByIdAndUpdate(req.params.id, data, {
+                new: true,
+                runValidators: true,
+                session: databaseSession
+            });
+        });
+
+        await updatedSession.populate({
+            path: 'companyId',
+            select: 'name address description telephone website'
+        });
+
+        res.status(200).json({ success: true, data: updatedSession });
+    } catch (err) {
+        if (err.code === 'SESSION_VALIDATION') {
+            return validationError(res, err.message);
+        }
+
+        if (err.code === 'SESSION_NOT_FOUND') {
+            return notFound(res, err.message);
+        }
+
+        next(err);
+    }
+};
+
+//@desc Delete an own-company interview session
+//@route DELETE /api/v1/interviewSessions/:id
+//@access Private/Representative
+exports.deleteInterviewSession = async (req, res, next) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return notFound(res);
+        }
+
+        const session = await InterviewSession.findById(req.params.id);
+
+        // Make sure representative owns the interview session's company.
+        if (!session) {
+            return notFound(res);
+        }
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
+        }
+
+        await runWithCompanyScheduleLock(session.companyId, async databaseSession => {
+            await InterviewBooking.updateMany(
+                { sessionId: session._id, status: { $ne: 'cancelled' } },
+                { $set: { status: 'cancelled', checkedInAt: null } },
+                { session: databaseSession }
+            );
+
+            await InterviewSession.deleteOne({ _id: session._id }, { session: databaseSession });
+        });
+
+        res.status(200).json({ success: true, data: {} });
+    } catch (err) {
+        if (err.code === 'SESSION_NOT_FOUND') {
+            return notFound(res, err.message);
+        }
+
+        next(err);
+    }
+};
+
+//@desc Get candidates for an own-company interview session
+//@route GET /api/v1/interviewSessions/:id/candidates
+//@access Private/Representative
+exports.getSessionCandidates = async (req, res, next) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return notFound(res);
+        }
+
+        const session = await InterviewSession.findById(req.params.id);
+
+        if (!session) {
+            return notFound(res);
+        }
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
+        }
+
+        const bookings = await InterviewBooking.find({ sessionId: session._id })
+            .populate('userId', 'name telephone email');
+
+        res.status(200).json({ success: true, count: bookings.length, data: bookings });
+    } catch (err) {
+        next(err);
+    }
+};
+
+//@desc Update a candidate status for an own-company interview session
+//@route PATCH /api/v1/interviewSessions/:id/bookings/:bookingId/status
+//@access Private/Representative
+exports.updateBookingStatus = async (req, res, next) => {
+    try {
+        const { id, bookingId } = req.params;
+        const { status } = req.body || {};
+
+        if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(bookingId)) {
+            return notFound(res);
+        }
+
+        if (!REPRESENTATIVE_STATUSES.includes(status)) {
+            return validationError(res, 'status must be checked_in, completed, cancelled or no_show');
+        }
+
+        const session = await InterviewSession.findById(id);
+
+        if (!session) {
+            return notFound(res);
+        }
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
+        }
+
+        const booking = await runWithSessionBookingLock(session._id, async (lockedSession, databaseSession) => {
+            const existingBooking = await InterviewBooking.findOne({
+                _id: bookingId,
+                sessionId: lockedSession._id
+            }).session(databaseSession);
+
+            if (!existingBooking) {
+                throw notFoundProblem('Interview booking not found');
+            }
+
+            if (existingBooking.status === 'cancelled' && status !== 'cancelled') {
+                const participantCount = await InterviewBooking.countDocuments({
+                    sessionId: lockedSession._id,
+                    _id: { $ne: existingBooking._id },
+                    status: { $ne: 'cancelled' }
+                }).session(databaseSession);
+
+                if (participantCount >= lockedSession.capacity) {
+                    throw sessionValidationProblem('Interview session is already at full capacity');
+                }
+            }
+
+            existingBooking.status = status;
+            if (status === 'checked_in') {
+                existingBooking.checkedInAt = new Date();
+            } else if (status === 'cancelled' || status === 'no_show') {
+                existingBooking.checkedInAt = null;
+            }
+
+            await existingBooking.save({ session: databaseSession });
+            return existingBooking.populate('userId', 'name telephone email');
+        });
+
+        res.status(200).json({ success: true, data: booking });
+    } catch (err) {
+        if (err.code === 'SESSION_VALIDATION') {
+            return validationError(res, err.message);
+        }
+
+        if (err.code === 'SESSION_NOT_FOUND') {
+            return notFound(res, err.message);
+        }
+
+        next(err);
     }
 };
