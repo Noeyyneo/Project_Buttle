@@ -1,30 +1,19 @@
 const mongoose = require('mongoose');
+const User = require('../models/User');
 const InterviewBooking = require('../models/InterviewBooking');
 const InterviewSession = require('../models/InterviewSession');
 
-// Helper to run operations within a MongoDB transaction if supported, or fallback to non-transactional
+// Helper to run operations strictly within a MongoDB transaction
 async function runInTransaction(operation) {
-    let dbSession = null;
+    const dbSession = await mongoose.startSession();
     try {
-        dbSession = await mongoose.startSession();
         let result;
         await dbSession.withTransaction(async () => {
             result = await operation(dbSession);
         });
         return result;
-    } catch (err) {
-        if (err.message && (
-            err.message.includes('Transaction numbers are only allowed on a replica set member') ||
-            err.message.includes('Transactions are not supported') ||
-            err.message.includes('standalone')
-        )) {
-            return await operation(null);
-        }
-        throw err;
     } finally {
-        if (dbSession) {
-            await dbSession.endSession();
-        }
+        await dbSession.endSession();
     }
 }
 
@@ -131,8 +120,20 @@ exports.addInterviewBooking = async (req, res, next) => {
         const targetUserId = req.user.id;
 
         const booking = await runInTransaction(async (dbSession) => {
-            const sessionQuery = InterviewSession.findById(sessionId);
-            const session = dbSession ? await sessionQuery.session(dbSession) : await sessionQuery;
+            // Serialize reservations per user to prevent concurrent requests from bypassing the 3-active-booking limit
+            const user = await User.findByIdAndUpdate(
+                targetUserId,
+                { $set: { updatedAt: new Date() } },
+                { session: dbSession }
+            );
+
+            if (!user) {
+                const err = new Error(`User with ID ${targetUserId} not found`);
+                err.statusCode = 404;
+                throw err;
+            }
+
+            const session = await InterviewSession.findById(sessionId).session(dbSession);
 
             if (!session) {
                 const err = new Error(`No session with the id of ${sessionId}`);
@@ -141,11 +142,10 @@ exports.addInterviewBooking = async (req, res, next) => {
             }
 
             // User cannot have more than 3 active bookings
-            const activeBookingQuery = InterviewBooking.countDocuments({
+            const activeBookingCount = await InterviewBooking.countDocuments({
                 userId: targetUserId,
                 status: { $in: ['booked', 'checked_in'] }
-            });
-            const activeBookingCount = dbSession ? await activeBookingQuery.session(dbSession) : await activeBookingQuery;
+            }).session(dbSession);
 
             if (activeBookingCount >= 3) {
                 const err = new Error('The user with ID ' + targetUserId + ' has already made 3 bookings');
@@ -154,12 +154,11 @@ exports.addInterviewBooking = async (req, res, next) => {
             }
 
             // Cannot book the same session more than once
-            const existingBookingQuery = InterviewBooking.findOne({
+            const existingBookingForSession = await InterviewBooking.findOne({
                 userId: targetUserId,
                 sessionId: session._id,
                 status: { $in: ['booked', 'checked_in'] }
-            });
-            const existingBookingForSession = dbSession ? await existingBookingQuery.session(dbSession) : await existingBookingQuery;
+            }).session(dbSession);
 
             if (existingBookingForSession) {
                 const err = new Error('You have already booked this interview session');
@@ -168,11 +167,10 @@ exports.addInterviewBooking = async (req, res, next) => {
             }
 
             // Session capacity limit
-            const sessionBookingsQuery = InterviewBooking.countDocuments({
+            const sessionBookingsCount = await InterviewBooking.countDocuments({
                 sessionId: session._id,
                 status: { $in: ['booked', 'checked_in'] }
-            });
-            const sessionBookingsCount = dbSession ? await sessionBookingsQuery.session(dbSession) : await sessionBookingsQuery;
+            }).session(dbSession);
 
             if (sessionBookingsCount >= session.capacity) {
                 const err = new Error('This interview session is already at full capacity');
@@ -181,13 +179,10 @@ exports.addInterviewBooking = async (req, res, next) => {
             }
 
             // Prevent overlapping session times for the same user
-            const userActiveBookingsQuery = InterviewBooking.find({
+            const userActiveBookings = await InterviewBooking.find({
                 userId: targetUserId,
                 status: { $in: ['booked', 'checked_in'] }
-            });
-            const userActiveBookings = dbSession
-                ? await userActiveBookingsQuery.session(dbSession).populate('sessionId')
-                : await userActiveBookingsQuery.populate('sessionId');
+            }).session(dbSession).populate('sessionId');
 
             const isOverlapping = userActiveBookings.some((b) => {
                 if (!b.sessionId) return false;
@@ -204,21 +199,19 @@ exports.addInterviewBooking = async (req, res, next) => {
             }
 
             // Touch session document within transaction to ensure atomic capacity reservation across concurrent requests
-            const touchOptions = dbSession ? { session: dbSession } : {};
             await InterviewSession.findByIdAndUpdate(
                 session._id,
                 { $set: { updatedAt: new Date() } },
-                touchOptions
+                { session: dbSession }
             );
 
-            const createOptions = dbSession ? { session: dbSession } : {};
             const created = await InterviewBooking.create(
                 [{
                     userId: targetUserId,
                     sessionId: session._id,
                     status: 'booked'
                 }],
-                createOptions
+                { session: dbSession }
             );
 
             return created[0];
@@ -277,8 +270,7 @@ exports.updateInterviewBooking = async (req, res, next) => {
         }
 
         const updatedBooking = await runInTransaction(async (dbSession) => {
-            const bookingQuery = InterviewBooking.findById(req.params.id);
-            let booking = dbSession ? await bookingQuery.session(dbSession) : await bookingQuery;
+            let booking = await InterviewBooking.findById(req.params.id).session(dbSession);
 
             if (!booking) {
                 const err = new Error(`No booking with the id of ${req.params.id}`);
@@ -294,6 +286,13 @@ exports.updateInterviewBooking = async (req, res, next) => {
                 throw err;
             }
 
+            // Serialize reservations per user to prevent concurrent requests from bypassing limits
+            await User.findByIdAndUpdate(
+                bookingOwnerId,
+                { $set: { updatedAt: new Date() } },
+                { session: dbSession }
+            );
+
             if (booking.status !== 'booked') {
                 const err = new Error(`Booking on status ${booking.status} can not be edited`);
                 err.statusCode = 400;
@@ -303,8 +302,7 @@ exports.updateInterviewBooking = async (req, res, next) => {
             // Changing session
             const currentSessionId = booking.sessionId?._id?.toString() || booking.sessionId?.toString();
             if (newSessionId && newSessionId.toString() !== currentSessionId) {
-                const newSessionQuery = InterviewSession.findById(newSessionId);
-                const newSession = dbSession ? await newSessionQuery.session(dbSession) : await newSessionQuery;
+                const newSession = await InterviewSession.findById(newSessionId).session(dbSession);
 
                 if (!newSession) {
                     const err = new Error(`No session with the id of ${newSessionId}`);
@@ -313,13 +311,12 @@ exports.updateInterviewBooking = async (req, res, next) => {
                 }
 
                 // Check if user already booked the new session
-                const existingBookingQuery = InterviewBooking.findOne({
+                const existingBooking = await InterviewBooking.findOne({
                     userId: bookingOwnerId,
                     sessionId: newSession._id,
                     _id: { $ne: booking._id },
                     status: { $in: ['booked', 'checked_in'] }
-                });
-                const existingBooking = dbSession ? await existingBookingQuery.session(dbSession) : await existingBookingQuery;
+                }).session(dbSession);
 
                 if (existingBooking) {
                     const err = new Error('You have already booked this interview session');
@@ -327,11 +324,10 @@ exports.updateInterviewBooking = async (req, res, next) => {
                     throw err;
                 }
 
-                const newSessionCountQuery = InterviewBooking.countDocuments({
+                const newSessionCount = await InterviewBooking.countDocuments({
                     sessionId: newSession._id,
                     status: { $in: ['booked', 'checked_in'] }
-                });
-                const newSessionCount = dbSession ? await newSessionCountQuery.session(dbSession) : await newSessionCountQuery;
+                }).session(dbSession);
 
                 if (newSessionCount >= newSession.capacity) {
                     const err = new Error('The new interview session is already at full capacity');
@@ -340,14 +336,11 @@ exports.updateInterviewBooking = async (req, res, next) => {
                 }
 
                 // Check overlap booking
-                const otherUserBookingsQuery = InterviewBooking.find({
+                const otherUserBookings = await InterviewBooking.find({
                     userId: bookingOwnerId,
                     _id: { $ne: booking._id },
                     status: { $in: ['booked', 'checked_in'] }
-                });
-                const otherUserBookings = dbSession
-                    ? await otherUserBookingsQuery.session(dbSession).populate('sessionId')
-                    : await otherUserBookingsQuery.populate('sessionId');
+                }).session(dbSession).populate('sessionId');
 
                 const hasOverlap = otherUserBookings.some((b) => {
                     if (!b.sessionId) return false;
@@ -363,11 +356,10 @@ exports.updateInterviewBooking = async (req, res, next) => {
                     throw err;
                 }
 
-                const touchOptions = dbSession ? { session: dbSession } : {};
                 await InterviewSession.findByIdAndUpdate(
                     newSession._id,
                     { $set: { updatedAt: new Date() } },
-                    touchOptions
+                    { session: dbSession }
                 );
             }
 
@@ -376,16 +368,10 @@ exports.updateInterviewBooking = async (req, res, next) => {
                 updatedAt: Date.now()
             };
 
-            const updateOptions = {
-                returnDocument: 'after',
-                runValidators: true,
-                ...(dbSession ? { session: dbSession } : {})
-            };
-
             return await InterviewBooking.findByIdAndUpdate(
                 req.params.id,
                 updateData,
-                updateOptions
+                { returnDocument: 'after', runValidators: true, session: dbSession }
             ).populate({
                 path: 'sessionId',
                 select: 'startAt endAt capacity companyId'
