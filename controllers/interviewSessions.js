@@ -145,7 +145,9 @@ function forbidden(res, message = 'No permission to access another company') {
 //@access Private
 exports.getInterviewSessions = async (req, res, next) => {
     try {
-        const query = isRepresentative(req) ? { companyId: req.user.companyId } : {};
+        const query = isRepresentative(req)
+            ? { companyId: req.user.companyId }
+            : (req.params.companyId ? { companyId: req.params.companyId } : {});
         const sessions = await InterviewSession.find(query).populate({
             path: 'companyId',
             select: 'name address description telephone website'
