@@ -82,6 +82,7 @@ async function runWithCompanyScheduleLock(companyId, operation) {
         let result;
 
         await databaseSession.withTransaction(async () => {
+            // A company write is the shared lock for its representatives' schedules.
             const company = await Company.findByIdAndUpdate(
                 companyId,
                 { $set: { updatedAt: new Date() } },
@@ -135,6 +136,10 @@ function notFound(res, message = 'Interview session not found') {
     return res.status(404).json({ success: false, message });
 }
 
+function forbidden(res, message = 'No permission to access another company') {
+    return res.status(403).json({ success: false, message });
+}
+
 //@desc Get all interview sessions available to the authenticated user
 //@route GET /api/v1/interviewSessions
 //@access Private
@@ -166,8 +171,12 @@ exports.getInterviewSession = async (req, res, next) => {
             select: 'name address description telephone website'
         });
 
-        if (!session || !canAccessSession(req, session)) {
+        if (!session) {
             return notFound(res);
+        }
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
         }
 
         res.status(200).json({ success: true, data: session });
@@ -203,6 +212,11 @@ exports.createInterviewSession = async (req, res, next) => {
             return createdSession;
         });
 
+        await session.populate({
+            path: 'companyId',
+            select: 'name address description telephone website'
+        });
+
         res.status(201).json({ success: true, data: session });
     } catch (err) {
         if (err.code === 'SESSION_VALIDATION') {
@@ -229,8 +243,12 @@ exports.updateInterviewSession = async (req, res, next) => {
         const session = await InterviewSession.findById(req.params.id);
 
         // Make sure representative owns the interview session's company.
-        if (!session || !canAccessSession(req, session)) {
+        if (!session) {
             return notFound(res);
+        }
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
         }
 
         const { startAt, endAt, capacity, data } = sessionData(req.body || {}, session);
@@ -266,6 +284,11 @@ exports.updateInterviewSession = async (req, res, next) => {
             });
         });
 
+        await updatedSession.populate({
+            path: 'companyId',
+            select: 'name address description telephone website'
+        });
+
         res.status(200).json({ success: true, data: updatedSession });
     } catch (err) {
         if (err.code === 'SESSION_VALIDATION') {
@@ -292,19 +315,30 @@ exports.deleteInterviewSession = async (req, res, next) => {
         const session = await InterviewSession.findById(req.params.id);
 
         // Make sure representative owns the interview session's company.
-        if (!session || !canAccessSession(req, session)) {
+        if (!session) {
             return notFound(res);
         }
 
-        const bookingCount = await InterviewBooking.countDocuments({ sessionId: session._id });
-        if (bookingCount > 0) {
-            return validationError(res, 'Cannot delete an interview session with existing bookings');
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
         }
 
-        await session.deleteOne();
+        await runWithCompanyScheduleLock(session.companyId, async databaseSession => {
+            await InterviewBooking.updateMany(
+                { sessionId: session._id, status: { $ne: 'cancelled' } },
+                { $set: { status: 'cancelled', checkedInAt: null } },
+                { session: databaseSession }
+            );
+
+            await InterviewSession.deleteOne({ _id: session._id }, { session: databaseSession });
+        });
 
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
+        if (err.code === 'SESSION_NOT_FOUND') {
+            return notFound(res, err.message);
+        }
+
         next(err);
     }
 };
@@ -320,8 +354,12 @@ exports.getSessionCandidates = async (req, res, next) => {
 
         const session = await InterviewSession.findById(req.params.id);
 
-        if (!session || !canAccessSession(req, session)) {
+        if (!session) {
             return notFound(res);
+        }
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
         }
 
         const bookings = await InterviewBooking.find({ sessionId: session._id })
@@ -351,8 +389,12 @@ exports.updateBookingStatus = async (req, res, next) => {
 
         const session = await InterviewSession.findById(id);
 
-        if (!session || !canAccessSession(req, session)) {
+        if (!session) {
             return notFound(res);
+        }
+
+        if (!canAccessSession(req, session)) {
+            return forbidden(res);
         }
 
         const booking = await runWithSessionBookingLock(session._id, async (lockedSession, databaseSession) => {
@@ -380,6 +422,8 @@ exports.updateBookingStatus = async (req, res, next) => {
             existingBooking.status = status;
             if (status === 'checked_in') {
                 existingBooking.checkedInAt = new Date();
+            } else if (status === 'cancelled' || status === 'no_show') {
+                existingBooking.checkedInAt = null;
             }
 
             await existingBooking.save({ session: databaseSession });
