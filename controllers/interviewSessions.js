@@ -138,6 +138,7 @@ function forbidden(res, message = 'No permission to access another company') {
 
 //@desc Get all interview sessions available to the authenticated user
 //@route GET /api/v1/interviewSessions
+//@route GET /api/v1/companies/:companyId/interviewSessions
 //@access Private
 exports.getInterviewSessions = async (req, res, next) => {
     try {
@@ -164,6 +165,7 @@ exports.getInterviewSessions = async (req, res, next) => {
 
 //@desc Get one interview session
 //@route GET /api/v1/interviewSessions/:id
+//@route GET /api/v1/companies/:companyId/interviewSessions/:id
 //@access Private
 exports.getInterviewSession = async (req, res, next) => {
     try {
@@ -180,6 +182,15 @@ exports.getInterviewSession = async (req, res, next) => {
             return notFound(res);
         }
 
+        // Make sure the interview session belongs to the company in the URL.
+        const sessionCompanyId = session.companyId?._id || session.companyId;
+        if (
+            req.params.companyId &&
+            sessionCompanyId.toString() !== req.params.companyId.toString()
+        ) {
+            return notFound(res);
+        }
+
         // Make sure representative owns the interview session's company.
         if (!canAccessSession(req, session)) {
             return forbidden(res);
@@ -193,6 +204,7 @@ exports.getInterviewSession = async (req, res, next) => {
 
 //@desc Create an interview session for the representative's company
 //@route POST /api/v1/interviewSessions
+//@route POST /api/v1/companies/:companyId/interviewSessions
 //@access Private/Representative
 exports.createInterviewSession = async (req, res, next) => {
     try {
@@ -248,6 +260,7 @@ exports.createInterviewSession = async (req, res, next) => {
 
 //@desc Update an own-company interview session
 //@route PUT /api/v1/interviewSessions/:id
+//@route PUT /api/v1/companies/:companyId/interviewSessions/:id
 //@access Private/Representative
 exports.updateInterviewSession = async (req, res, next) => {
     try {
@@ -258,6 +271,14 @@ exports.updateInterviewSession = async (req, res, next) => {
         let session = await InterviewSession.findById(req.params.id);
 
         if (!session) {
+            return notFound(res);
+        }
+
+        // Make sure the interview session belongs to the company in the URL.
+        if (
+            req.params.companyId &&
+            session.companyId.toString() !== req.params.companyId.toString()
+        ) {
             return notFound(res);
         }
 
@@ -320,6 +341,7 @@ exports.updateInterviewSession = async (req, res, next) => {
 
 //@desc Delete an own-company interview session
 //@route DELETE /api/v1/interviewSessions/:id
+//@route DELETE /api/v1/companies/:companyId/interviewSessions/:id
 //@access Private/Representative
 exports.deleteInterviewSession = async (req, res, next) => {
     try {
@@ -330,6 +352,14 @@ exports.deleteInterviewSession = async (req, res, next) => {
         const session = await InterviewSession.findById(req.params.id);
 
         if (!session) {
+            return notFound(res);
+        }
+
+        // Make sure the interview session belongs to the company in the URL.
+        if (
+            req.params.companyId &&
+            session.companyId.toString() !== req.params.companyId.toString()
+        ) {
             return notFound(res);
         }
 
@@ -360,6 +390,7 @@ exports.deleteInterviewSession = async (req, res, next) => {
 
 //@desc Get candidates for an own-company interview session
 //@route GET /api/v1/interviewSessions/:id/candidates
+//@route GET /api/v1/companies/:companyId/interviewSessions/:id/candidates
 //@access Private/Representative
 exports.getSessionCandidates = async (req, res, next) => {
     try {
@@ -370,6 +401,14 @@ exports.getSessionCandidates = async (req, res, next) => {
         const session = await InterviewSession.findById(req.params.id);
 
         if (!session) {
+            return notFound(res);
+        }
+
+        // Make sure the interview session belongs to the company in the URL.
+        if (
+            req.params.companyId &&
+            session.companyId.toString() !== req.params.companyId.toString()
+        ) {
             return notFound(res);
         }
 
@@ -389,6 +428,7 @@ exports.getSessionCandidates = async (req, res, next) => {
 
 //@desc Update a candidate status for an own-company interview session
 //@route PATCH /api/v1/interviewSessions/:id/bookings/:bookingId/status
+//@route PATCH /api/v1/companies/:companyId/interviewSessions/:id/bookings/:bookingId/status
 //@access Private/Representative
 exports.updateBookingStatus = async (req, res, next) => {
     try {
@@ -406,6 +446,14 @@ exports.updateBookingStatus = async (req, res, next) => {
         const session = await InterviewSession.findById(id);
 
         if (!session) {
+            return notFound(res);
+        }
+
+        // Make sure the interview session belongs to the company in the URL.
+        if (
+            req.params.companyId &&
+            session.companyId.toString() !== req.params.companyId.toString()
+        ) {
             return notFound(res);
         }
 
