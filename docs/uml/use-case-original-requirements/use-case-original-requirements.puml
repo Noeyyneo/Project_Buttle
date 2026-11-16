@@ -26,7 +26,7 @@ rectangle "Online Job Fair Registration System" {
   usecase "Select preferred company\nand interview date" as UC_Select
   usecase "View own bookings" as UC_ViewOwn
   usecase "Edit own booking" as UC_EditOwn
-  usecase "Cancel own booking" as UC_CancelOwn
+  usecase "Delete own booking" as UC_DeleteOwn
   usecase "View all bookings" as UC_ViewAll
   usecase "Edit any booking" as UC_EditAny
   usecase "Delete any booking" as UC_DeleteAny
@@ -38,22 +38,25 @@ Guest --> UC_Register
 Guest --> UC_Login
 
 User --> UC_Logout
+User --> UC_Login
 User --> UC_Companies
 User --> UC_Create
 User --> UC_ViewOwn
 User --> UC_EditOwn
-User --> UC_CancelOwn
+User --> UC_DeleteOwn
 
 Admin --> UC_Logout
 Admin --> UC_ViewAll
 Admin --> UC_EditAny
 Admin --> UC_DeleteAny
 
+Admin --|> User
+
 UC_Companies .> UC_Auth : <<include>>
 UC_Create .> UC_Auth : <<include>>
 UC_ViewOwn .> UC_Auth : <<include>>
 UC_EditOwn .> UC_Auth : <<include>>
-UC_CancelOwn .> UC_Auth : <<include>>
+UC_DeleteOwn .> UC_Auth : <<include>>
 UC_ViewAll .> UC_Auth : <<include>>
 UC_EditAny .> UC_Auth : <<include>>
 UC_DeleteAny .> UC_Auth : <<include>>

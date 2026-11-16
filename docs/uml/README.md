@@ -18,9 +18,9 @@ The following additional requirements are deliberately excluded: representative 
 
 | File | Purpose |
 | --- | --- |
-| `use-case-original-requirements.puml` | System actors and original functional requirements. |
-| `class-original-requirements.puml` | Domain class diagram / UML profile. |
-| `sequence-create-booking.puml` | Detailed O3 booking sequence, using the `client -> server -> router -> controller -> model -> MongoDB` structure from `VacQ_puml`. |
+| `use-case-original-requirements/use-case-original-requirements.puml` | System actors and original functional requirements. |
+| `class-original-requirements/class-original-requirements.puml` | Domain class diagram / UML profile. |
+| `sequence-create-booking/sequence-create-booking.puml` | Detailed O3 booking sequence, using the `client -> server -> router -> controller -> model -> MongoDB` structure from `VacQ_puml`. |
 
 ## Render locally in VS Code
 

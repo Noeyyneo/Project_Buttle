@@ -1,4 +1,4 @@
-@startuml Create Interview Booking (POST)
+@startuml sequence-create-booking
 
 header Online Job Fair Sequence Diagram
 footer Page %page% of %lastpage%
@@ -44,9 +44,15 @@ alt bookingCount is less than 3 and session date is 10-13 May 2022
   modelBooking -> database ++ : InterviewBookingSchema
   database --> modelBooking -- : booking
   modelBooking --> controllerBookings -- : created booking
-  controllerBookings --> client -- : 201 Created { success, data }
+  controllerBookings --> client : 201 Created { success, data }
+  deactivate controllerBookings
+  deactivate routerBookings
+  deactivate server
 else user already has 3 bookings or session date is invalid
-  controllerBookings --> client -- : 400 Bad Request { success: false, message }
+  controllerBookings --> client : 400 Bad Request { success: false, message }
+  deactivate controllerBookings
+  deactivate routerBookings
+  deactivate server
 end
 
 @enduml
