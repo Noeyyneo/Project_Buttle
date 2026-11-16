@@ -12,9 +12,11 @@ const {
 const router = express.Router({mergeParams: true});
 
 const {protect, authorize} = require('../middleware/auth');
+const requireApprovedRepresentative = require('../middleware/requireApprovedRepresentative');
+const requireApprovedRepresentativeWhenApplicable = requireApprovedRepresentative.whenApplicable;
 
 router.route('/')
-    .get(protect, getInterviewBookings)
+    .get(protect, requireApprovedRepresentativeWhenApplicable, getInterviewBookings)
     .post(protect, authorize('user'), addInterviewBooking);
 
 // Check-in endpoints for registered users (and admin)
