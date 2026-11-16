@@ -1,0 +1,98 @@
+@startuml
+title Online Job Fair Registration System\nClass Diagram / UML Profile - Original Requirements Only (O1-O9)
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam class {
+  BackgroundColor #F8FAFC
+  BorderColor #2563EB
+  ArrowColor #475569
+}
+
+class User <<entity>>{
+  +id: ObjectId
+  +name: String
+  +telephone: String
+  +email: String
+  -passwordHash: String
+  +createdAt: DateTime
+  +register()
+  +login(password)
+  +logout()
+}
+
+class Administrator <<entity>> {
+  +manageBooking()
+}
+
+class Company <<entity>> {
+  +id: ObjectId
+  +name: String
+  +address: String
+  +website: URL
+  +description: String
+  +telephone: String
+  +listInformation()
+}
+
+class InterviewSession <<entity>> {
+  +id: ObjectId
+  +startAt: DateTime
+  +endAt: DateTime
+  +companyId: ObjectId
+}
+
+class InterviewBooking <<entity>> {
+  +id: ObjectId
+  +userId: ObjectId
+  +sessionId: ObjectId
+  +createdAt: DateTime
+  +update(sessionId)
+  +cancel()
+}
+
+class "Booking Service" as BookingService <<control>> {
+  +createBooking(userId, sessionId)
+  +updateBooking(bookingId, sessionId)
+  +deleteBooking(bookingId)
+  +validateRules(userId, sessionId)
+}
+
+class "Authentication Service" as AuthenticationService <<control>> {
+  +authenticate(credentials)
+  +authorize(actor, action)
+}
+
+Administrator --|> User
+Company "1" *-- "0..*" InterviewSession : offers >
+User "1" -- "0..3" InterviewBooking : owns >
+InterviewSession "1" -- "0..*" InterviewBooking : reserved for >
+User ..> AuthenticationService : authenticates with >
+Administrator ..> AuthenticationService : authenticates with >
+User ..> BookingService : creates / changes / cancels >
+Administrator ..> BookingService : manages >
+BookingService ..> InterviewBooking : persists >
+BookingService ..> InterviewSession : checks >
+
+note right of User
+  Constraint: a registered user
+  may own at most 3 active bookings.
+end note
+
+note bottom of InterviewSession
+  A bookable interview session falls within
+  10-13 May 2022 (O3).
+end note
+
+note bottom of Administrator
+  Administrator may view, edit, and delete
+  any booking (O7-O9).
+end note
+
+legend right
+  <<entity>> persistent domain data
+  <<control>> application-service responsibility
+  Excludes additional-requirement classes/fields.
+endlegend
+@enduml

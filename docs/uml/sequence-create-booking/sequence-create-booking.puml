@@ -1,0 +1,52 @@
+@startuml Create Interview Booking (POST)
+
+header Online Job Fair Sequence Diagram
+footer Page %page% of %lastpage%
+title "Create Interview Booking - O3"
+
+participant "Client / Postman" as client
+participant "<<javaScript>>\n:server" as server
+participant "<<router>>\n:interviewBookings" as routerBookings
+participant "<<middleware>>\n:auth" as middlewareAuth
+participant "<<controllers>>\n:interviewBookings" as controllerBookings
+participant "<<model>>\n:User" as modelUser
+participant "<<model>>\n:InterviewSession" as modelSession
+participant "<<model>>\n:InterviewBooking" as modelBooking
+database "<<MongoDB>>\nusers, interviewSessions,\ninterviewbookings" as database
+
+client -> server ++ : POST /api/v1/bookings\nAuthorization: Bearer token\n{ sessionId }
+server -> routerBookings ++ : app.use('/api/v1/bookings', interviewBookings)
+routerBookings -> middlewareAuth ++ : protect()
+middlewareAuth -> modelUser ++ : findById(decoded.id)
+modelUser -> database ++ : UserSchema
+database --> modelUser -- : authenticated user
+modelUser --> middlewareAuth -- : user
+middlewareAuth --> routerBookings -- : req.user
+routerBookings -> middlewareAuth ++ : authorize('user')
+middlewareAuth --> routerBookings -- : authorized
+routerBookings -> controllerBookings ++ : addInterviewBooking()
+
+controllerBookings -> modelUser ++ : findByIdAndUpdate(userId)
+modelUser -> database ++ : UserSchema
+database --> modelUser -- : user
+modelUser --> controllerBookings -- : user
+controllerBookings -> modelSession ++ : findById(sessionId)
+modelSession -> database ++ : SessionSchema
+database --> modelSession -- : session
+modelSession --> controllerBookings -- : session
+controllerBookings -> modelBooking ++ : countDocuments({ userId })
+modelBooking -> database ++ : InterviewBookingSchema
+database --> modelBooking -- : bookingCount
+modelBooking --> controllerBookings -- : bookingCount
+
+alt bookingCount is less than 3 and session date is 10-13 May 2022
+  controllerBookings -> modelBooking ++ : create({ userId, sessionId })
+  modelBooking -> database ++ : InterviewBookingSchema
+  database --> modelBooking -- : booking
+  modelBooking --> controllerBookings -- : created booking
+  controllerBookings --> client -- : 201 Created { success, data }
+else user already has 3 bookings or session date is invalid
+  controllerBookings --> client -- : 400 Bad Request { success: false, message }
+end
+
+@enduml
