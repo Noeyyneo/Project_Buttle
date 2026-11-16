@@ -6,6 +6,10 @@ const router = express.Router();
 const {protect, authorize} = require('../middleware/auth');
 const requireApprovedRepresentative = require('../middleware/requireApprovedRepresentative');
 const companyOwnership = require('../middleware/companyOwnership');
+const interviewSessionRouter = require('./interviewSessions');
+
+// Re-route into other resource routers
+router.use('/:companyId/interviewSessions', interviewSessionRouter);
 
 router.route('/').get(getCompanies).post(protect, authorize('admin'), createCompany);
 router.route('/:id')

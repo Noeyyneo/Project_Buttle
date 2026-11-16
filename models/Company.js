@@ -40,13 +40,16 @@ const CompanySchema = new mongoose.Schema({
     }
 }, {
     timestamps: true,
-    collection: 'companies'
+    collection: 'companies',
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
 });
 
+// Reverse populate with virtuals
 CompanySchema.virtual('interviewSessions', {
-    ref: 'Session',
+    ref: 'InterviewSession',
     localField: '_id',
-    foreignField: 'company',
+    foreignField: 'companyId',
     justOne: false
 });
 

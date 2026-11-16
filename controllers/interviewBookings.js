@@ -19,7 +19,7 @@ async function runInTransaction(operation) {
 
 //@desc Get all booking
 //@route GET /api/v1/bookings
-//@access Public
+//@access Private
 exports.getInterviewBookings = async (req, res, next) => {
     let query;
     // Normal users can see only their own bookings
@@ -70,8 +70,8 @@ exports.getInterviewBookings = async (req, res, next) => {
 };
 
 //@desc Get single booking
-//@route GET /api/v1/booking/:id
-//@access Public
+//@route GET /api/v1/bookings/:id
+//@access Private
 exports.getInterviewBooking = async (req, res, next) => {
     try {
         const interviewBooking = await InterviewBooking.findById(req.params.id).populate({
@@ -106,8 +106,8 @@ exports.getInterviewBooking = async (req, res, next) => {
 };
 
 //@desc Add booking
-//@route POST /api/v1/sessions/:sessionId/booking
-//@access Private
+//@route POST /api/v1/bookings
+//@access Private/User
 exports.addInterviewBooking = async (req, res, next) => {
     try {
         const sessionId = req.params.sessionId || req.body.sessionId;
@@ -247,7 +247,7 @@ exports.addInterviewBooking = async (req, res, next) => {
 
 //@desc Update booking
 //@route PUT /api/v1/bookings/:id
-//@access Private
+//@access Private/User or Admin
 exports.updateInterviewBooking = async (req, res, next) => {
     try {
         const reqBody = req.body || {};
@@ -438,7 +438,7 @@ exports.deleteInterviewBooking = async (req, res, next) => {
 };
 
 //@desc Check in to interview session
-//@route PUT /api/v1/bookings/:id/checkin or POST /api/v1/bookings/:id/checkin
+//@route PUT /api/v1/bookings/:id/check-in
 //@access Private (User / Admin)
 exports.checkInInterviewBooking = async (req, res, next) => {
     try {
