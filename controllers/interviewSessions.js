@@ -7,17 +7,13 @@ const { validateSessionData } = require('../lib/interviewSessionRules');
 const REPRESENTATIVE_STATUSES = ['checked_in', 'completed', 'cancelled', 'no_show'];
 const SESSION_FIELDS = ['startAt', 'endAt', 'capacity'];
 
-function isRepresentative(req) {
-    return req.user?.role === 'representative';
-}
-
 function canAccessSession(req, session) {
-    if (!isRepresentative(req)) {
+    if (req.user.role !== 'representative') {
         return true;
     }
 
     const sessionCompanyId = session.companyId?._id || session.companyId;
-    const userCompanyId = req.user?.companyId?._id || req.user?.companyId;
+    const userCompanyId = req.user.companyId?._id || req.user.companyId;
 
     if (!sessionCompanyId || !userCompanyId) {
         return false;
@@ -145,10 +141,17 @@ function forbidden(res, message = 'No permission to access another company') {
 //@access Private
 exports.getInterviewSessions = async (req, res, next) => {
     try {
-        const query = isRepresentative(req)
-            ? { companyId: req.user.companyId }
-            : (req.params.companyId ? { companyId: req.params.companyId } : {});
-        const sessions = await InterviewSession.find(query).populate({
+        let query;
+
+        if (req.user.role === 'representative') {
+            query = InterviewSession.find({ companyId: req.user.companyId });
+        } else if (req.params.companyId) {
+            query = InterviewSession.find({ companyId: req.params.companyId });
+        } else {
+            query = InterviewSession.find();
+        }
+
+        const sessions = await query.populate({
             path: 'companyId',
             select: 'name address description telephone website'
         });
@@ -177,6 +180,7 @@ exports.getInterviewSession = async (req, res, next) => {
             return notFound(res);
         }
 
+        // Make sure representative owns the interview session's company.
         if (!canAccessSession(req, session)) {
             return forbidden(res);
         }
@@ -192,6 +196,15 @@ exports.getInterviewSession = async (req, res, next) => {
 //@access Private/Representative
 exports.createInterviewSession = async (req, res, next) => {
     try {
+        const companyId = req.params.companyId || req.user.companyId;
+
+        if (
+            req.params.companyId &&
+            req.params.companyId.toString() !== req.user.companyId.toString()
+        ) {
+            return notFound(res, 'Company not found');
+        }
+
         const { startAt, endAt, capacity } = sessionData(req.body || {});
         const error = validateSessionData({ startAt, endAt, capacity });
 
@@ -199,13 +212,13 @@ exports.createInterviewSession = async (req, res, next) => {
             return validationError(res, error);
         }
 
-        const session = await runWithCompanyScheduleLock(req.user.companyId, async databaseSession => {
-            if (await overlapsAnotherSession(req.user.companyId, startAt, endAt, null, databaseSession)) {
+        const session = await runWithCompanyScheduleLock(companyId, async databaseSession => {
+            if (await overlapsAnotherSession(companyId, startAt, endAt, null, databaseSession)) {
                 throw sessionValidationProblem('Interview sessions for the same company must not overlap');
             }
 
             const [createdSession] = await InterviewSession.create([{
-                companyId: req.user.companyId,
+                companyId,
                 startAt,
                 endAt,
                 capacity
@@ -242,13 +255,13 @@ exports.updateInterviewSession = async (req, res, next) => {
             return notFound(res);
         }
 
-        const session = await InterviewSession.findById(req.params.id);
+        let session = await InterviewSession.findById(req.params.id);
 
-        // Make sure representative owns the interview session's company.
         if (!session) {
             return notFound(res);
         }
 
+        // Make sure representative owns the interview session's company.
         if (!canAccessSession(req, session)) {
             return forbidden(res);
         }
@@ -265,7 +278,7 @@ exports.updateInterviewSession = async (req, res, next) => {
             return validationError(res, error);
         }
 
-        const updatedSession = await runWithCompanyScheduleLock(session.companyId, async databaseSession => {
+        session = await runWithCompanyScheduleLock(session.companyId, async databaseSession => {
             if (await overlapsAnotherSession(session.companyId, startAt, endAt, session._id, databaseSession)) {
                 throw sessionValidationProblem('Interview sessions for the same company must not overlap');
             }
@@ -286,12 +299,12 @@ exports.updateInterviewSession = async (req, res, next) => {
             });
         });
 
-        await updatedSession.populate({
+        await session.populate({
             path: 'companyId',
             select: 'name address description telephone website'
         });
 
-        res.status(200).json({ success: true, data: updatedSession });
+        res.status(200).json({ success: true, data: session });
     } catch (err) {
         if (err.code === 'SESSION_VALIDATION') {
             return validationError(res, err.message);
@@ -316,11 +329,11 @@ exports.deleteInterviewSession = async (req, res, next) => {
 
         const session = await InterviewSession.findById(req.params.id);
 
-        // Make sure representative owns the interview session's company.
         if (!session) {
             return notFound(res);
         }
 
+        // Make sure representative owns the interview session's company.
         if (!canAccessSession(req, session)) {
             return forbidden(res);
         }
@@ -332,7 +345,7 @@ exports.deleteInterviewSession = async (req, res, next) => {
                 { session: databaseSession }
             );
 
-            await InterviewSession.deleteOne({ _id: session._id }, { session: databaseSession });
+            await session.deleteOne({ session: databaseSession });
         });
 
         res.status(200).json({ success: true, data: {} });
@@ -360,6 +373,7 @@ exports.getSessionCandidates = async (req, res, next) => {
             return notFound(res);
         }
 
+        // Make sure representative owns the interview session's company.
         if (!canAccessSession(req, session)) {
             return forbidden(res);
         }
@@ -395,6 +409,7 @@ exports.updateBookingStatus = async (req, res, next) => {
             return notFound(res);
         }
 
+        // Make sure representative owns the interview session's company.
         if (!canAccessSession(req, session)) {
             return forbidden(res);
         }

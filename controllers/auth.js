@@ -18,7 +18,7 @@ exports.register = async (req, res, next) => {
         if (!name || !telephone || !email || !password) {
             return res.status(400).json({
                 success: false,
-                msg: 'Please provide name, telephone, email and password'
+                message: 'Please provide name, telephone, email and password'
             });
         }
 
@@ -26,7 +26,7 @@ exports.register = async (req, res, next) => {
         if (role && !['user', 'representative'].includes(role)) {
             return res.status(400).json({
                 success: false,
-                msg: 'Invalid role for public registration'
+                message: 'Invalid role for public registration'
             });
         }
         const assignedRole = role || 'user';
@@ -36,7 +36,7 @@ exports.register = async (req, res, next) => {
             if (!companyId) {
                 return res.status(400).json({
                     success: false,
-                    msg: 'Representative must have companyId'
+                    message: 'Representative must have companyId'
                 });
             }
             const company = await Company.findById(companyId);
@@ -44,7 +44,7 @@ exports.register = async (req, res, next) => {
             if (!company) {
                 return res.status(400).json({
                     success: false,
-                    msg: 'company not founded'
+                    message: 'Company not found'
                 });
             }
         }
@@ -52,7 +52,7 @@ exports.register = async (req, res, next) => {
         if (assignedRole === 'user' && companyId) {
             return res.status(400).json({
                 success: false,
-                msg: 'Only representatives can have company'
+                message: 'Only representatives can have company'
             });
         }
         const normalizedEmail = email.trim().toLowerCase();
@@ -66,7 +66,7 @@ exports.register = async (req, res, next) => {
         if (existingUser) {
             return res.status(400).json({
                 success: false,
-                msg: 'Email is already registered'
+                message: 'Email is already registered'
             });
         }
 
@@ -81,7 +81,7 @@ exports.register = async (req, res, next) => {
 
         if (assignedRole === 'representative') {
             userData.companyId = companyId,
-                userData.approvalStatus = 'pending';
+            userData.approvalStatus = 'pending';
         }
 
         const user = await User.create(userData);
@@ -99,7 +99,7 @@ exports.register = async (req, res, next) => {
 
         return res.status(400).json({
             success: false,
-            msg: err.message
+            message: err.message
         });
     }
 };
@@ -114,7 +114,7 @@ exports.createAdmin = async (req, res, next) => {
         if (!name || !telephone || !email || !password) {
             return res.status(400).json({
                 success: false,
-                msg: 'Please provide name, telephone, email and password'
+                message: 'Please provide name, telephone, email and password'
             });
         }
 
@@ -127,7 +127,7 @@ exports.createAdmin = async (req, res, next) => {
         if (existingUser) {
             return res.status(400).json({
                 success: false,
-                msg: 'Email is already registered'
+                message: 'Email is already registered'
             });
         }
 
@@ -141,7 +141,7 @@ exports.createAdmin = async (req, res, next) => {
 
         res.status(201).json({
             success: true,
-            msg: 'Admin account created successfully',
+            message: 'Admin account created successfully',
             data: {
                 id: user._id,
                 name: user.name,
@@ -184,7 +184,7 @@ exports.login = async (req, res, next) => {
         if (!email || !password) {
             return res.status(400).json({
                 success: false,
-                msg: 'Please provide an email and password'
+                message: 'Please provide an email and password'
             });
         }
 
@@ -198,7 +198,7 @@ exports.login = async (req, res, next) => {
         if (!user) {
             return res.status(401).json({
                 success: false,
-                msg: 'Invalid credentials'
+                message: 'Invalid credentials'
             });
         }
 
@@ -208,7 +208,7 @@ exports.login = async (req, res, next) => {
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
-                msg: 'Invalid credentials'
+                message: 'Invalid credentials'
             });
         }
 
@@ -219,7 +219,7 @@ exports.login = async (req, res, next) => {
         ) {
             return res.status(403).json({
                 success: false,
-                msg: 'Your representative account has not been approved'
+                message: 'Your representative account has not been approved'
             });
         }
 
@@ -233,7 +233,7 @@ exports.login = async (req, res, next) => {
 };
 
 //@desc Logout user
-//@route POST /api/v1/auth/Logout
+//@route POST /api/v1/auth/logout
 //@access Private
 exports.logout = async (req, res, next) => {
     try {
@@ -251,7 +251,7 @@ exports.logout = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            msg: 'User logged out successfully'
+            message: 'User logged out successfully'
         });
     } catch (err) {
         next(err);
@@ -259,7 +259,7 @@ exports.logout = async (req, res, next) => {
 }
 
 //@desc Get current Logged in user
-//@route POST /api/v1/auth/me
+//@route GET /api/v1/auth/me
 //@access Private
 exports.getMe = async (req, res, next) => {
     const user = await User.findById(req.user.id);
