@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Project Buttle - Complete Requirement Coverage",
-    "description": "Import this collection, seed the local development database from Project_Buttle with `node ../scripts/seed.js`, start the API, then run `00 - Test setup` once. Each numbered folder maps directly to an original (R) or additional (AR) project requirement. Tests assert the expected HTTP response and relevant response data. Requests labelled [restores state] are safe to run; they create then remove only temporary data.",
+    "description": "Import this collection, run `npm run seed` from the project root to seed the local development database, start the API, then run `00 - Test setup` once. Each numbered folder maps directly to an original (R) or additional (AR) project requirement. Tests assert the expected HTTP response and relevant response data. Requests labelled [restores state] are safe to run; they create then remove only temporary data.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -12,11 +12,11 @@
     { "key": "maxThreeToken", "value": "" },
     { "key": "alphaRepToken", "value": "" },
     { "key": "brightRepToken", "value": "" },
+    { "key": "registeredRepToken", "value": "" },
     { "key": "alphaCompanyId", "value": "" },
     { "key": "brightCompanyId", "value": "" },
     { "key": "alphaSessionId", "value": "" },
     { "key": "alphaSessionTwoId", "value": "" },
-    { "key": "brightFullSessionId", "value": "" },
     { "key": "brightSessionId", "value": "" },
     { "key": "maxThreeBookingId", "value": "" },
     { "key": "maxThreeSessionId", "value": "" },
