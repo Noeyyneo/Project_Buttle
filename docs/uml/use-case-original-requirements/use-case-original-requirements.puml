@@ -12,6 +12,9 @@ skinparam actor {
   BorderColor #1D4ED8
   FontColor #0F172A
 }
+skinparam nodesep 80
+skinparam ranksep 80
+skinparam linetype ortho
 
 actor Guest
 actor "Registered User" as User
