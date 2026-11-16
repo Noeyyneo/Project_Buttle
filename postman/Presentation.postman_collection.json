@@ -1,0 +1,570 @@
+{
+  "info": {
+    "name": "Project Buttle - Presentation Runner",
+    "description": "Run this collection top-to-bottom in Postman Runner after `npm run seed` and starting the API. It follows the presentation order. Steps 0, 13, 14, and 16 are presentation cues; they have no API request.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1"
+    },
+    {
+      "key": "password",
+      "value": "Password123!"
+    },
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "userEmail",
+      "value": ""
+    },
+    {
+      "key": "userPhone",
+      "value": ""
+    },
+    {
+      "key": "userToken",
+      "value": ""
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "bookingId",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "adminBookingId",
+      "value": ""
+    },
+    {
+      "key": "adminBookingSessionId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0 - Intro Presentation: Use Case Diagram (show slide)",
+      "description": "Presentation cue - show the Use Case Diagram slide before running Step 1.",
+      "item": []
+    },
+    {
+      "name": "1 - User Registration + Validation Check",
+      "item": [
+        {
+          "name": "1.1 Register new user (valid)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const id=Date.now().toString(); pm.collectionVariables.set('runId',id); pm.collectionVariables.set('userEmail','presenter.'+id+'@buttle.test'); pm.collectionVariables.set('userPhone','0'+id.slice(-9));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('registration succeeds',()=>pm.response.to.have.status(201));",
+                  "pm.test('returns token',()=>pm.expect(pm.response.json().token).to.be.a('string')); "
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Presentation User {{runId}}\",\"telephone\":\"{{userPhone}}\",\"email\":\"{{userEmail}}\",\"password\":\"{{password}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "1.2 Reject invalid registration (missing telephone)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('validation returns 400',()=>pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Invalid User\",\"email\":\"invalid.{{runId}}@buttle.test\",\"password\":\"{{password}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - User Log-in",
+      "item": [
+        {
+          "name": "2.1 Login - Presentation User (registered account)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('login succeeds',()=>pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('userToken',pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{userEmail}}\",\"password\":\"{{password}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - User View Product (companies)",
+      "item": [
+        {
+          "name": "3.1 List companies and product information",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('companies are returned',()=>pm.response.to.have.status(200));",
+                  "pm.test('company has required information',()=>{const c=pm.response.json().data[0]; ['name','address','website','description','telephone'].forEach(k=>pm.expect(c).to.have.property(k));});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/companies"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 - User Create Booking + Condition Check",
+      "item": [
+        {
+          "name": "4.1 Find an interview session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('sessions are available',()=>pm.response.to.have.status(200));",
+                  "const sessions=pm.response.json().data; pm.expect(sessions.length).to.be.above(0); pm.collectionVariables.set('sessionId',sessions[0]._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/interviewSessions"
+          }
+        },
+        {
+          "name": "4.2 Create booking (valid)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('booking is created',()=>pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('bookingId',pm.response.json().data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sessionId\":\"{{sessionId}}\"}"
+            },
+            "url": "{{baseUrl}}/bookings"
+          }
+        },
+        {
+          "name": "4.3 Reject duplicate booking (condition check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('duplicate booking returns 400',()=>pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sessionId\":\"{{sessionId}}\"}"
+            },
+            "url": "{{baseUrl}}/bookings"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 - User View Own Booking",
+      "item": [
+        {
+          "name": "5.1 List the newly created booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('own booking list returns 200',()=>pm.response.to.have.status(200));",
+                  "pm.test('created booking is visible',()=>pm.expect(pm.response.json().data.some(b=>b._id===pm.collectionVariables.get('bookingId'))).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/bookings"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 - User Edit Own Booking",
+      "item": [
+        {
+          "name": "6.1 Update own booking (same session)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('own booking updates',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sessionId\":\"{{sessionId}}\"}"
+            },
+            "url": "{{baseUrl}}/bookings/{{bookingId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "7 - User Delete Own Booking",
+      "item": [
+        {
+          "name": "7.1 Delete created booking [restores presentation state]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('own booking is deleted',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/bookings/{{bookingId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "8 - User Log-out",
+      "item": [
+        {
+          "name": "8.1 Logout - Presentation User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('logout succeeds',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "9 - Admin Log-in",
+      "item": [
+        {
+          "name": "9.1 Login - System Admin (administrator account)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('admin login succeeds',()=>pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken',pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"admin@buttle.test\",\"password\":\"{{password}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Admin View Any Booking",
+      "item": [
+        {
+          "name": "10.1 List all bookings and select a demo booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('admin sees all bookings',()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json().data.find(x=>x.status==='booked') || pm.response.json().data[0]; pm.expect(b).to.exist; pm.collectionVariables.set('adminBookingId',b._id); pm.collectionVariables.set('adminBookingSessionId',b.sessionId._id || b.sessionId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/bookings"
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Admin Edit Any Booking",
+      "item": [
+        {
+          "name": "11.1 Update selected booking (same session)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('admin updates booking',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sessionId\":\"{{adminBookingSessionId}}\"}"
+            },
+            "url": "{{baseUrl}}/bookings/{{adminBookingId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Admin Delete Any Booking",
+      "item": [
+        {
+          "name": "12.1 Delete selected seeded booking (destructive - reseed after presentation)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('admin deletes booking',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/bookings/{{adminBookingId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Project Document: Class Diagram (show slide)",
+      "description": "Presentation cue - show the Class Diagram slide.",
+      "item": []
+    },
+    {
+      "name": "14 - Project Document: Sequence Diagram (show slide)",
+      "description": "Presentation cue - show the Sequence Diagram slide.",
+      "item": []
+    },
+    {
+      "name": "15 - Extra Credits Demo",
+      "item": [
+        {
+          "name": "15.1 Rejected representative cannot log in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('rejected account is denied',()=>pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"rep.rejected@buttle.test\",\"password\":\"{{password}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 - Team Contributions (show GitHub Insights > Contributors)",
+      "description": "Presentation cue - open GitHub Insights > Contributors in the slide.",
+      "item": []
+    }
+  ]
+}
