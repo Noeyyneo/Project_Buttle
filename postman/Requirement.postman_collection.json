@@ -1,0 +1,171 @@
+{
+  "info": {
+    "name": "Project Buttle - Complete Requirement Coverage",
+    "description": "Import this collection, seed the local development database from Project_Buttle with `node ../scripts/seed.js`, start the API, then run `00 - Test setup` once. Each numbered folder maps directly to an original (R) or additional (AR) project requirement. Tests assert the expected HTTP response and relevant response data. Requests labelled [restores state] are safe to run; they create then remove only temporary data.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "password", "value": "Password123!" },
+    { "key": "adminToken", "value": "" },
+    { "key": "userToken", "value": "" },
+    { "key": "maxThreeToken", "value": "" },
+    { "key": "alphaRepToken", "value": "" },
+    { "key": "brightRepToken", "value": "" },
+    { "key": "alphaCompanyId", "value": "" },
+    { "key": "brightCompanyId", "value": "" },
+    { "key": "alphaSessionId", "value": "" },
+    { "key": "alphaSessionTwoId", "value": "" },
+    { "key": "brightFullSessionId", "value": "" },
+    { "key": "brightSessionId", "value": "" },
+    { "key": "maxThreeBookingId", "value": "" },
+    { "key": "maxThreeSessionId", "value": "" },
+    { "key": "brightBookingId", "value": "" },
+    { "key": "alphaRepresentativeId", "value": "" },
+    { "key": "runId", "value": "" },
+    { "key": "temporaryBookingId", "value": "" },
+    { "key": "temporarySessionId", "value": "" },
+    { "key": "registeredRepresentativeId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 - Test setup (run first)",
+      "item": [
+        { "name": "Create unique run ID", "event": [{ "listen": "prerequest", "script": { "exec": ["pm.collectionVariables.set('runId', Date.now().toString());"] }}], "request": { "method": "GET", "url": "{{baseUrl}}/companies" } },
+        { "name": "Login - System Admin (administrator account)", "event": [{ "listen": "test", "script": { "exec": ["pm.test('admin login succeeds', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('adminToken', pm.response.json().token);"] }}], "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"email\": \"admin@buttle.test\",\n  \"password\": \"{{password}}\"\n}"}, "url": "{{baseUrl}}/auth/login" } },
+        { "name": "Login - New Candidate (registered user, no bookings)", "event": [{ "listen": "test", "script": { "exec": ["pm.test('user login succeeds', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('userToken', pm.response.json().token);"] }}], "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"email\": \"newcandidate@buttle.test\",\n  \"password\": \"{{password}}\"\n}"}, "url": "{{baseUrl}}/auth/login" } },
+        { "name": "Login - Max Three Candidate (registered user, 3 active bookings)", "event": [{ "listen": "test", "script": { "exec": ["pm.test('max-three user login succeeds', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('maxThreeToken', pm.response.json().token);"] }}], "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"email\": \"maxthree@buttle.test\",\n  \"password\": \"{{password}}\"\n}"}, "url": "{{baseUrl}}/auth/login" } },
+        { "name": "Login - Alpha Representative (approved account)", "event": [{ "listen": "test", "script": { "exec": ["pm.test('approved representative login succeeds', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('alphaRepToken', pm.response.json().token);"] }}], "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"email\": \"rep.alpha@buttle.test\",\n  \"password\": \"{{password}}\"\n}"}, "url": "{{baseUrl}}/auth/login" } },
+        { "name": "Login - Bright Representative (approved account)", "event": [{ "listen": "test", "script": { "exec": ["pm.test('second representative login succeeds', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('brightRepToken', pm.response.json().token);"] }}], "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"email\": \"rep.bright@buttle.test\",\n  \"password\": \"{{password}}\"\n}"}, "url": "{{baseUrl}}/auth/login" } },
+        { "name": "Discover Alpha company and session IDs", "event": [{ "listen": "test", "script": { "exec": ["pm.test('Alpha sessions are available', () => pm.response.to.have.status(200));", "const sessions=pm.response.json().data; pm.expect(sessions.length).to.be.above(1); pm.collectionVariables.set('alphaSessionId', sessions[0]._id); pm.collectionVariables.set('alphaSessionTwoId', sessions[1]._id); pm.collectionVariables.set('alphaCompanyId', sessions[0].companyId._id || sessions[0].companyId);"] }}], "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{alphaRepToken}}"}], "url": "{{baseUrl}}/interviewSessions" } },
+        { "name": "Discover Bright company, session, and booking IDs", "event": [{ "listen": "test", "script": { "exec": ["pm.test('Bright bookings are available', () => pm.response.to.have.status(200));", "const bookings=pm.response.json().data; pm.expect(bookings.length).to.be.above(0); const b=bookings[0]; const s=b.sessionId; pm.collectionVariables.set('brightBookingId', b._id); pm.collectionVariables.set('brightSessionId', s._id || s); pm.collectionVariables.set('brightCompanyId', (s.companyId && (s.companyId._id || s.companyId)) || '');"] }}], "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{brightRepToken}}"}], "url": "{{baseUrl}}/bookings" } },
+        { "name": "Discover candidate booking IDs", "event": [{ "listen": "test", "script": { "exec": ["pm.test('candidate bookings are available', () => pm.response.to.have.status(200));", "const bookings=pm.response.json().data; pm.expect(bookings.length).to.be.above(0); const b=bookings[0]; pm.collectionVariables.set('maxThreeBookingId', b._id); pm.collectionVariables.set('maxThreeSessionId', b.sessionId._id || b.sessionId);"] }}], "request": { "method": "GET", "header": [{"key":"Authorization","value":"Bearer {{maxThreeToken}}"}], "url": "{{baseUrl}}/bookings" } }
+      ]
+    },
+    {
+      "name": "R1 - User registration",
+      "item": [
+        { "name": "R1.1 Register user with all required fields", "event": [{"listen":"test","script":{"exec":["pm.test('creates the registered user', () => pm.response.to.have.status(201));", "pm.test('returns a JWT', () => pm.expect(pm.response.json().token).to.be.a('string');"]}}], "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"name\": \"Demo User {{runId}}\",\n  \"telephone\": \"0891112222\",\n  \"email\": \"demo.user.{{runId}}@buttle.test\",\n  \"password\": \"Password123!\"\n}"},"url":"{{baseUrl}}/auth/register"} },
+        { "name": "R1.2 Reject registration missing telephone", "event":[{"listen":"test","script":{"exec":["pm.test('validates required registration fields', () => pm.response.to.have.status(400));"]}}], "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"name\": \"Missing Field\",\n  \"email\": \"missing.{{runId}}@buttle.test\",\n  \"password\": \"Password123!\"\n}"},"url":"{{baseUrl}}/auth/register"} }
+      ]
+    },
+    {
+      "name": "R2 - Login, authenticated access, logout",
+      "item": [
+        { "name":"R2.1 Reject invalid credentials", "event":[{"listen":"test","script":{"exec":["pm.test('does not authenticate invalid credentials', () => pm.response.to.have.status(401));"]}}], "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"email\":\"newcandidate@buttle.test\",\"password\":\"wrong-password\"}"},"url":"{{baseUrl}}/auth/login"} },
+        { "name":"R2.2 Read current authenticated user", "event":[{"listen":"test","script":{"exec":["pm.test('returns authenticated user', () => pm.response.to.have.status(200));"]}}], "request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{userToken}}"}],"url":"{{baseUrl}}/auth/me"} },
+        { "name":"R2.3 Reject protected route without token", "event":[{"listen":"test","script":{"exec":["pm.test('requires authentication', () => pm.response.to.have.status(401));"]}}], "request":{"method":"GET","url":"{{baseUrl}}/auth/me"} },
+        { "name":"R2.4 Logout invalidates the active token", "event":[{"listen":"test","script":{"exec":["pm.test('logout succeeds', () => pm.response.to.have.status(200));"]}}], "request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{userToken}}"}],"url":"{{baseUrl}}/auth/logout"} },
+        { "name":"R2.5 Re-login for remaining folders", "event":[{"listen":"test","script":{"exec":["pm.test('can log in again after logout', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('userToken', pm.response.json().token);"]}}], "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"email\":\"newcandidate@buttle.test\",\"password\":\"{{password}}\"}"},"url":"{{baseUrl}}/auth/login"} }
+      ]
+    },
+    {
+      "name":"R3 - Book up to 3 sessions and view companies",
+      "item":[
+        {"name":"R3.1 List companies with required company information","event":[{"listen":"test","script":{"exec":["pm.test('lists companies', () => pm.response.to.have.status(200));", "pm.test('company exposes required fields', () => { const c=pm.response.json().data[0]; ['name','address','website','description','telephone'].forEach(k=>pm.expect(c).to.have.property(k)); });"]}}],"request":{"method":"GET","url":"{{baseUrl}}/companies"}},
+        {"name":"R3.2 List available interview sessions","event":[{"listen":"test","script":{"exec":["pm.test('lists sessions', () => pm.response.to.have.status(200));"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{userToken}}"}],"url":"{{baseUrl}}/interviewSessions"}},
+        {"name":"R3.3 Reject a fourth active booking","event":[{"listen":"test","script":{"exec":["pm.test('enforces the maximum of three bookings', () => pm.response.to.have.status(400));"]}}],"request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{maxThreeToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"sessionId\":\"{{brightSessionId}}\"}"},"url":"{{baseUrl}}/bookings"}},
+        {"name":"R3.4 Reject duplicate booking for the same session","event":[{"listen":"test","script":{"exec":["pm.test('rejects a duplicate booking', () => pm.response.to.have.status(400));"]}}],"request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{maxThreeToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"sessionId\":\"{{maxThreeSessionId}}\"}"},"url":"{{baseUrl}}/bookings"}}
+      ]
+    },
+    {
+      "name":"R4 - Registered user views own bookings",
+      "item":[
+        {"name":"R4.1 List only the logged-in user's bookings","event":[{"listen":"test","script":{"exec":["pm.test('returns own booking list', () => pm.response.to.have.status(200));", "pm.test('returns an array', () => pm.expect(pm.response.json().data).to.be.an('array')); "]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{maxThreeToken}}"}],"url":"{{baseUrl}}/bookings"}},
+        {"name":"R4.2 Cannot view another user's booking","event":[{"listen":"test","script":{"exec":["pm.test('protects booking ownership', () => pm.response.to.have.status(403));"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{userToken}}"}],"url":"{{baseUrl}}/bookings/{{maxThreeBookingId}}"}}
+      ]
+    },
+    {
+      "name":"R5 - Registered user edits own booking",
+      "item":[
+        {"name":"R5.1 Update own booking to same session","event":[{"listen":"test","script":{"exec":["pm.test('updates own booking', () => pm.response.to.have.status(200));"]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{maxThreeToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"sessionId\":\"{{maxThreeSessionId}}\"}"},"url":"{{baseUrl}}/bookings/{{maxThreeBookingId}}"}},
+        {"name":"R5.2 Reject status edits through booking update","event":[{"listen":"test","script":{"exec":["pm.test('reserves status updates for check-in/status endpoints', () => pm.response.to.have.status(400));"]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{maxThreeToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"status\":\"cancelled\"}"},"url":"{{baseUrl}}/bookings/{{maxThreeBookingId}}"}},
+        {"name":"R5.3 Cannot edit another user's booking","event":[{"listen":"test","script":{"exec":["pm.test('protects booking ownership', () => pm.response.to.have.status(403));"]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"sessionId\":\"{{maxThreeSessionId}}\"}"},"url":"{{baseUrl}}/bookings/{{maxThreeBookingId}}"}}
+      ]
+    },
+    {
+      "name":"R6 - Registered user deletes own booking [restores state]",
+      "item":[
+        {"name":"R6.1 Create disposable own booking","event":[{"listen":"test","script":{"exec":["pm.test('creates disposable booking', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('temporaryBookingId', pm.response.json().data._id);"]}}],"request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"sessionId\":\"{{brightSessionId}}\"}"},"url":"{{baseUrl}}/bookings"}},
+        {"name":"R6.2 Delete own disposable booking","event":[{"listen":"test","script":{"exec":["pm.test('deletes own booking', () => pm.response.to.have.status(200));"]}}],"request":{"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{userToken}}"}],"url":"{{baseUrl}}/bookings/{{temporaryBookingId}}"}}
+      ]
+    },
+    {
+      "name":"R7 - Administrator views all bookings",
+      "item":[
+        {"name":"R7.1 Admin lists all interview bookings","event":[{"listen":"test","script":{"exec":["pm.test('admin can view bookings', () => pm.response.to.have.status(200));", "pm.test('admin sees seeded booking records', () => pm.expect(pm.response.json().count).to.be.above(0));"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{adminToken}}"}],"url":"{{baseUrl}}/bookings"}}
+      ]
+    },
+    {
+      "name":"R8 - Administrator edits any booking",
+      "item":[
+        {"name":"R8.1 Admin updates another user's booking","event":[{"listen":"test","script":{"exec":["pm.test('admin can update any booking', () => pm.response.to.have.status(200));"]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"sessionId\":\"{{maxThreeSessionId}}\"}"},"url":"{{baseUrl}}/bookings/{{maxThreeBookingId}}"}}
+      ]
+    },
+    {
+      "name":"R9 - Administrator deletes any booking [restores state]",
+      "item":[
+        {"name":"R9.1 Candidate creates disposable booking","event":[{"listen":"test","script":{"exec":["pm.test('creates booking for admin-deletion proof', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('temporaryBookingId', pm.response.json().data._id);"]}}],"request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{userToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"sessionId\":\"{{brightSessionId}}\"}"},"url":"{{baseUrl}}/bookings"}},
+        {"name":"R9.2 Admin deletes another user's booking","event":[{"listen":"test","script":{"exec":["pm.test('admin deletes any booking', () => pm.response.to.have.status(200));"]}}],"request":{"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{adminToken}}"}],"url":"{{baseUrl}}/bookings/{{temporaryBookingId}}"}}
+      ]
+    },
+    {
+      "name":"AR1 - Representative registration",
+      "item":[
+        {"name":"AR1.1 Register representative with company","event":[{"listen":"test","script":{"exec":["pm.test('creates pending representative', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('registeredRepToken', pm.response.json().token);"]}}],"request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"name\": \"Demo Representative {{runId}}\",\n  \"telephone\": \"0892223333\",\n  \"email\": \"demo.rep.{{runId}}@buttle.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"representative\",\n  \"companyId\": \"{{alphaCompanyId}}\"\n}"},"url":"{{baseUrl}}/auth/register"}},
+        {"name":"AR1.2 Reject representative registration without company","event":[{"listen":"test","script":{"exec":["pm.test('requires a company for representative accounts', () => pm.response.to.have.status(400));"]}}],"request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"name\":\"No Company\",\"telephone\":\"0892224444\",\"email\":\"no.company.{{runId}}@buttle.test\",\"password\":\"Password123!\",\"role\":\"representative\"}"},"url":"{{baseUrl}}/auth/register"}},
+        {"name":"Login - Pending Representative (pending account; expect 403)","event":[{"listen":"test","script":{"exec":["pm.test('prevents pending representative access', () => pm.response.to.have.status(403));"]}}],"request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"email\":\"rep.pending@buttle.test\",\"password\":\"{{password}}\"}"},"url":"{{baseUrl}}/auth/login"}},
+        {"name":"Login - Rejected Representative (rejected account; expect 403)","event":[{"listen":"test","script":{"exec":["pm.test('prevents rejected representative access', () => pm.response.to.have.status(403));"]}}],"request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"email\":\"rep.rejected@buttle.test\",\"password\":\"{{password}}\"}"},"url":"{{baseUrl}}/auth/login"}}
+      ]
+    },
+    {
+      "name":"AR2 - Administrator approves or rejects representatives",
+      "item":[
+        {"name":"AR2.1 Admin lists representatives and approval status","event":[{"listen":"test","script":{"exec":["pm.test('admin lists representative accounts', () => pm.response.to.have.status(200));", "pm.test('representatives include approvalStatus and company', () => { const r=pm.response.json().data[0]; pm.expect(r).to.have.property('approvalStatus'); pm.expect(r).to.have.property('companyId'); });", "pm.collectionVariables.set('alphaRepresentativeId', pm.response.json().data[0]._id);"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{adminToken}}"}],"url":"{{baseUrl}}/admin/representatives"}},
+        {"name":"AR2.2 Get newly registered representative ID","event":[{"listen":"test","script":{"exec":["pm.test('pending representative token can identify its account', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('registeredRepresentativeId', pm.response.json().data._id);"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{registeredRepToken}}"}],"url":"{{baseUrl}}/auth/me"}},
+        {"name":"AR2.3 Admin rejects the pending representative","event":[{"listen":"test","script":{"exec":["pm.test('admin can reject representative', () => pm.response.to.have.status(200));", "pm.test('sets rejected status', () => pm.expect(pm.response.json().data.approvalStatus).to.eql('rejected')); "]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"approvalStatus\":\"rejected\",\"rejectionReason\":\"Demonstration rejection\"}"},"url":"{{baseUrl}}/admin/representatives/{{registeredRepresentativeId}}"}},
+        {"name":"AR2.4 Admin approves the representative","event":[{"listen":"test","script":{"exec":["pm.test('admin can approve representative', () => pm.response.to.have.status(200));", "pm.test('sets approved status', () => pm.expect(pm.response.json().data.approvalStatus).to.eql('approved')); "]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"approvalStatus\":\"approved\"}"},"url":"{{baseUrl}}/admin/representatives/{{registeredRepresentativeId}}"}},
+        {"name":"AR2.5 Reject non-admin representative management","event":[{"listen":"test","script":{"exec":["pm.test('restricts approval management to admins', () => pm.response.to.have.status(403));"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{userToken}}"}],"url":"{{baseUrl}}/admin/representatives"}}
+      ]
+    },
+    {
+      "name":"AR3 - Approved representative CRUDs own-company sessions [restores state]",
+      "item":[
+        {"name":"AR3.1 Create own-company session","event":[{"listen":"test","script":{"exec":["pm.test('representative creates own session', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('temporarySessionId', pm.response.json().data._id);"]}}],"request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"startAt\":\"2022-05-13T16:00:00.000Z\",\"endAt\":\"2022-05-13T16:30:00.000Z\",\"capacity\":2}"},"url":"{{baseUrl}}/interviewSessions"}},
+        {"name":"AR3.2 Read own-company session","event":[{"listen":"test","script":{"exec":["pm.test('representative reads own session', () => pm.response.to.have.status(200));"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"}],"url":"{{baseUrl}}/interviewSessions/{{temporarySessionId}}"}},
+        {"name":"AR3.3 Update own-company session","event":[{"listen":"test","script":{"exec":["pm.test('representative updates own session', () => pm.response.to.have.status(200));"]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"capacity\":3}"},"url":"{{baseUrl}}/interviewSessions/{{temporarySessionId}}"}},
+        {"name":"AR3.4 Delete own-company temporary session","event":[{"listen":"test","script":{"exec":["pm.test('representative deletes own session', () => pm.response.to.have.status(200));"]}}],"request":{"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"}],"url":"{{baseUrl}}/interviewSessions/{{temporarySessionId}}"}}
+      ]
+    },
+    {
+      "name":"AR4 - Session date, time, overlap, capacity validation",
+      "item":[
+        {"name":"AR4.1 Reject overlapping company session","event":[{"listen":"test","script":{"exec":["pm.test('rejects overlapping sessions', () => pm.response.to.have.status(400));"]}}],"request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"startAt\":\"2022-05-10T09:15:00.000Z\",\"endAt\":\"2022-05-10T09:45:00.000Z\",\"capacity\":2}"},"url":"{{baseUrl}}/interviewSessions"}},
+        {"name":"AR4.2 Reject date outside May 10-13","event":[{"listen":"test","script":{"exec":["pm.test('rejects invalid event date', () => pm.response.to.have.status(400));"]}}],"request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"startAt\":\"2022-05-14T09:00:00.000Z\",\"endAt\":\"2022-05-14T09:30:00.000Z\",\"capacity\":2}"},"url":"{{baseUrl}}/interviewSessions"}},
+        {"name":"AR4.3 Reject zero capacity","event":[{"listen":"test","script":{"exec":["pm.test('rejects non-positive capacity', () => pm.response.to.have.status(400));"]}}],"request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"startAt\":\"2022-05-13T17:00:00.000Z\",\"endAt\":\"2022-05-13T17:30:00.000Z\",\"capacity\":0}"},"url":"{{baseUrl}}/interviewSessions"}}
+      ]
+    },
+    {
+      "name":"AR5 - Representative views only own-company candidates",
+      "item":[
+        {"name":"AR5.1 View candidates in own-company session","event":[{"listen":"test","script":{"exec":["pm.test('returns own-company candidates', () => pm.response.to.have.status(200));", "pm.test('returns candidate array', () => pm.expect(pm.response.json().data).to.be.an('array')); "]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"}],"url":"{{baseUrl}}/interviewSessions/{{alphaSessionId}}/candidates"}},
+        {"name":"AR5.2 Cannot view another company's candidates","event":[{"listen":"test","script":{"exec":["pm.test('hides another company candidates', () => pm.response.to.have.status(403));"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{alphaRepToken}}"}],"url":"{{baseUrl}}/interviewSessions/{{brightSessionId}}/candidates"}}
+      ]
+    },
+    {
+      "name":"AR6 - Check-in window and representative status updates",
+      "item":[
+        {"name":"AR6.1 Reject check-in before allowed window","event":[{"listen":"test","script":{"exec":["pm.test('enforces check-in window', () => pm.response.to.have.status(400));"]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{maxThreeToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"checkInTime\":\"2022-05-10T08:00:00.000Z\"}"},"url":"{{baseUrl}}/bookings/{{maxThreeBookingId}}/check-in"}},
+        {"name":"AR6.2 Representative updates candidate status","event":[{"listen":"test","script":{"exec":["pm.test('representative updates allowed status', () => pm.response.to.have.status(200));", "pm.test('sets completed', () => pm.expect(pm.response.json().data.status).to.eql('completed')); "]}}],"request":{"method":"PATCH","header":[{"key":"Authorization","value":"Bearer {{brightRepToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"status\":\"completed\"}"},"url":"{{baseUrl}}/interviewSessions/{{brightSessionId}}/bookings/{{brightBookingId}}/status"}},
+        {"name":"AR6.3 Reject unsupported representative booking status","event":[{"listen":"test","script":{"exec":["pm.test('only permits specified representative statuses', () => pm.response.to.have.status(400));"]}}],"request":{"method":"PATCH","header":[{"key":"Authorization","value":"Bearer {{brightRepToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"status\":\"booked\"}"},"url":"{{baseUrl}}/interviewSessions/{{brightSessionId}}/bookings/{{brightBookingId}}/status"}}
+      ]
+    },
+    {
+      "name":"AR7 - Administrator manages representative accounts",
+      "item":[
+        {"name":"AR7.1 Admin views a representative and associated company","event":[{"listen":"test","script":{"exec":["pm.test('admin reads representative', () => pm.response.to.have.status(200));", "pm.test('includes representative approval and company', () => { const r=pm.response.json().data; pm.expect(r).to.have.property('approvalStatus'); pm.expect(r).to.have.property('companyId'); });"]}}],"request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{adminToken}}"}],"url":"{{baseUrl}}/admin/representatives/{{alphaRepresentativeId}}"}},
+        {"name":"AR7.2 Admin updates representative approval status","event":[{"listen":"test","script":{"exec":["pm.test('admin manages representative account', () => pm.response.to.have.status(200));", "pm.test('keeps approval status approved', () => pm.expect(pm.response.json().data.approvalStatus).to.eql('approved')); "]}}],"request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{adminToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"approvalStatus\":\"approved\"}"},"url":"{{baseUrl}}/admin/representatives/{{alphaRepresentativeId}}"}}
+      ]
+    }
+  ]
+}
